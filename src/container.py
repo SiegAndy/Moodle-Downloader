@@ -1,4 +1,3 @@
-
 from enum import Enum
 import json
 from typing import Dict, List
@@ -9,9 +8,8 @@ from src.utils.enum import mod_type
 
 class url:
     def __init__(self, link: str) -> None:
-        request_type, *other = link.split('://')[0]
+        request_type, *other = link.split("://")[0]
         print(type(other))
-
 
 
 class section_container:
@@ -34,12 +32,11 @@ class section_container:
             "type": self._type,
             "title": self._title,
             "link": self._link,
-            "content": self._content
+            "content": self._content,
         }
-    
+
     def __str__(self) -> str:
         return json.dumps(self.to_json(), indent=4)
-    
+
     def __repr__(self) -> str:
         return str(self)
-        
