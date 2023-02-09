@@ -1,7 +1,7 @@
 from collections import defaultdict
 from http.cookies import CookieError
 import json
-from typing import Dict, List
+from typing import Any, Dict, List
 from bs4 import BeautifulSoup, Tag
 
 import requests
@@ -13,20 +13,33 @@ class extractor:
     class_id: str
     store_path: str
     login_cookie: Dict[str, str]
+    info_dict: Dict[str, Dict]
+    extract_section_index: int
 
     def __init__(
-        self, class_id: str, store_path: str, login_cookie: Dict[str, str] = None
+        self,
+        class_id: str,
+        store_path: str,
+        target_website: str = None,
+        login_cookie: Dict[str, str] = None,
+        extract_section_index: int = -1,
     ) -> None:
         self.class_id = class_id
         self.store_path = store_path
+        self.extract_section_index = extract_section_index
+
         if login_cookie is None:
-            self.login_cookie = retreive_cookies(target_website="umass.moonami.com")
+            if target_website is None:
+                raise ValueError(
+                    "Error! Missing target website url, need to specify one of [target_website, login_cookie]!"
+                )
+            self.login_cookie = retreive_cookies(target_website=target_website)
         else:
             self.login_cookie = login_cookie
 
-        self.extract_sections()
+        self.info_dict = defaultdict(dict)
 
-    def extract_sections(self):
+    def extract_sections(self) -> Dict[str, Dict]:
         res = requests.get(
             moodle_course_url.format(self.class_id), cookies=self.login_cookie
         )
@@ -53,12 +66,15 @@ class extractor:
         #     f.write(soup.prettify())
 
         sections: List[Tag] = soup.find_all("li", class_="section main clearfix")
-        info_dict = defaultdict(dict)
+        self.info_dict.clear()
         for index, section in enumerate(sections):
             section_title = section["aria-label"]
-            info_dict[section["id"]]["title"] = section_title
-            info_dict[section["id"]]["checksum"] = checksum(section)
-            info_dict[section["id"]]["items"] = dict()
+            self.info_dict[section["id"]]["title"] = section_title
+            self.info_dict[section["id"]]["checksum"] = checksum(section)
+            self.info_dict[section["id"]]["items"] = dict()
+
+            if self.extract_section_index != -1 and self.extract_section_index != index:
+                continue
 
             print(
                 "-" * 20
@@ -67,20 +83,32 @@ class extractor:
             )
 
             section_page_elements = section.find(id=f"collapse-{index}")
+
             self.extract_section_info(
-                section_page_elements, info_dict[section["id"]]["items"]
+                section_page_elements, self.info_dict[section["id"]]["items"]
             )
 
-            if len(info_dict[section["id"]]["items"].items()) > 0:
+            if len(self.info_dict[section["id"]]["items"].items()) > 0:
                 msg = f" Retrieved Section {index}: '{section_title}'"
             else:
                 msg = f"Fail to Retrieved Section {index}: '{section_title}'.\nDetail: Section not containing files."
             print("-" * 20 + "''{:^80}''".format(msg) + "-" * 20)
 
-        with open(self.store_path, "w", encoding="utf-8") as record:
-            record.write(json.dumps(info_dict, indent=4))
+        print(
+            "-" * 20
+            + "''{:^80}''".format("Retrieval Complete! Now Downloading Files...")
+            + "-" * 20
+        )
+        print()
 
-    def extract_section_info(self, section_page_elements: Tag, section_info: Dict):
+        with open(self.store_path, "w", encoding="utf-8") as record:
+            record.write(json.dumps(self.info_dict, indent=4))
+
+        return self.info_dict
+
+    def extract_section_info(
+        self, section_page_elements: Tag, section_info: Dict
+    ) -> Dict[str, Dict]:
         content: List[Tag] = section_page_elements.find_all("li")
         if len(content) == 0:
             return
@@ -114,3 +142,9 @@ class extractor:
             item_info["content"] = list()
             for sibling in siblings:
                 item_info["content"].append(sibling.get_text().replace("\xa0", ""))
+
+        return section_info
+
+    def __call__(self, *args: Any, **kwds: Any) -> Dict[str, Dict]:
+        self.extract_sections()
+        return self.info_dict

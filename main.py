@@ -1,4 +1,4 @@
-from src import extractor
+from src import extractor, constructor
 
 mod_type = {
     "assign": "assignment",
@@ -14,8 +14,15 @@ cookies = {
     "MoodleSession": "qv1nirji59vpjlrha7n0g1am2i",
 }
 
-path = "files/test.json"
+path = "test"
 
 if __name__ == "__main__":
-    inputs = {"class_id": 34311, "store_path": path}  # , "login_cookie": cookies}
-    extractor(**inputs)
+    inputs = {
+        "class_id": 34311,
+        "store_dir": path,
+        "target_website": "umass.moonami.com",
+    }  # , "login_cookie": cookies}
+    # extractor(**inputs)
+    content = constructor(**inputs)
+    content.extraction()
+    content.construct_sections()
