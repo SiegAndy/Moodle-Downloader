@@ -1,6 +1,7 @@
 from collections import defaultdict
 from http.cookies import CookieError
 import json
+import logging
 from typing import Any, Dict, List
 from bs4 import BeautifulSoup, Tag
 
@@ -54,8 +55,8 @@ class extractor:
                 "Invalid Cookie! Please login to the Moodle First, and then try to retreive all the contents!"
             )
         else:
-            print()
-            print(
+            logging.info("")
+            logging.info(
                 "-" * 20
                 + "''{:^80}''".format(
                     f"Retrieving Course: '{res_title.split(':')[1].strip(' ')}'"
@@ -76,7 +77,7 @@ class extractor:
             if self.extract_section_index != -1 and self.extract_section_index != index:
                 continue
 
-            print(
+            logging.info(
                 "-" * 20
                 + "''{:^80}''".format(f"Retrieving Section {index}: '{section_title}'")
                 + "-" * 20
@@ -92,14 +93,14 @@ class extractor:
                 msg = f" Retrieved Section {index}: '{section_title}'"
             else:
                 msg = f"Fail to Retrieved Section {index}: '{section_title}'.\nDetail: Section not containing files."
-            print("-" * 20 + "''{:^80}''".format(msg) + "-" * 20)
+            logging.info("-" * 20 + "''{:^80}''".format(msg) + "-" * 20)
 
-        print(
+        logging.info(
             "-" * 20
             + "''{:^80}''".format("Retrieval Complete! Now Downloading Files...")
             + "-" * 20
         )
-        print()
+        logging.info("")
 
         with open(self.store_path, "w", encoding="utf-8") as record:
             record.write(json.dumps(self.info_dict, indent=4))

@@ -1,3 +1,4 @@
+import logging
 import os
 import json
 import sqlite3
@@ -54,9 +55,9 @@ def retreive_cookies(target_website: str, debug: bool = False) -> Dict[str, str]
             decrypted_value = retreive_cookie_value(encrypted_value, decrypted_key)
             cookies[name] = decrypted_value
             if debug:
-                print(f"{site}:")
-                print(f"cookie name :\t{name}")
-                print(f"cookie value:\t{decrypted_value}\n")
+                logging.info(f"{site}:")
+                logging.info(f"cookie name :\t{name}")
+                logging.info(f"cookie value:\t{decrypted_value}\n")
     cursor.close()
     connection.close()
     return cookies

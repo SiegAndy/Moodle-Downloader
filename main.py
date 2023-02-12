@@ -1,4 +1,7 @@
+import logging, logging.config
 from src import extractor, constructor
+
+logging.config.fileConfig("log_config.ini")
 
 mod_type = {
     "assign": "assignment",
@@ -23,6 +26,7 @@ if __name__ == "__main__":
         "target_website": "umass.moonami.com",
     }  # , "login_cookie": cookies}
     # extractor(**inputs)
+
     content = constructor(**inputs)
     content.extraction()
     content.construct_sections()

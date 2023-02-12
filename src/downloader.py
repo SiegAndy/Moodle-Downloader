@@ -1,6 +1,7 @@
 # Partial Modified Code from Package file-downloader "https://pypi.org/project/file-downloader/"
 
 from io import BufferedReader
+import logging
 from math import floor
 import os
 import traceback
@@ -49,6 +50,7 @@ class downloader:
     progress: float  # progress of the download
     content_length: int  # target file total length
     fetched_length: int  # downloaded target file length
+    downloaded: bool  # whether the file is already downloaded
 
     params: Dict
     loading_thread: loading
@@ -57,7 +59,7 @@ class downloader:
         self,
         url: str,
         cookies: Dict[str, str],
-        store_path: str = None,
+        store_path: str = "",
         socket_timeout: float = 120.0,
         retry_limit: int = 5,
     ):
@@ -70,6 +72,7 @@ class downloader:
         self.retry_num = 0
         self.progress = 0
         self.fetched_length = 0
+        self.downloaded = False
         self.loading_thread = None
         self.params = {
             "url": self.url,
@@ -111,7 +114,7 @@ class downloader:
             res = requests.head(**self.params)
             # if self.store_path is None:
             self.file_name = res.url.split("?")[0].split("/")[-1]
-            self.store_path += self.file_name
+            # self.store_path += self.file_name
         except Exception:
             return False
         return True
@@ -176,24 +179,28 @@ class downloader:
                     print_out, ending = progress_bar(
                         current=self.fetched_length,
                         total=self.content_length,
-                        string_in_front=f"Progress: {self.file_name}: ",
+                        string_in_front=f"Extracting File: {self.file_name:>40}: ",
                     )
                     print(print_out, end=ending)
                 except Exception:
                     traceback.print_exc()
                     self.__retry()
             file_obj.close()
+            self.downloaded = True
+            logging.info(f"File Downloaded: {self.store_path}")
             if call_back:
                 call_back(cursize=self.fetched_length)
         except Exception:
             traceback.print_exc()
 
-    def download(self, call_back: Callable = None):
+    def download(self, download_path: str = None, call_back: Callable = None):
         """
         Starts the file download
 
         Reset previous download progress if needed
         """
+        if download_path != None:
+            self.store_path = download_path
 
         self.start_loading_thread()
         self.retry_num = 0
@@ -209,7 +216,20 @@ class downloader:
                 return True
         except Exception as e:
             self.stop_loading_thread()
-            print(f"Error! {e}")
+            logging.warning(f"Error! {e}")
+            return False
+
+    def duplicate(self, new_file_path: str):
+        if not self.downloaded:
+            self.download()
+
+        try:
+            with open(self.store_path, "rb") as file_obj:
+                with open(new_file_path, "wb") as new_file_obj:
+                    new_file_obj.write(file_obj.read())
+            return True
+        except Exception as e:
+            logging.warning(f"Error! {e}")
             return False
 
     def resume(self, restart: bool = False, call_back: Callable = None):
@@ -223,7 +243,7 @@ class downloader:
         if restart:
             return self.download()
         elif self.fetched_length >= self.content_length:
-            print(
+            logging.warning(
                 "Local File Larger than Cloud File. Potential Error Found, Redownloading..."
             )
             return self.download()
@@ -243,7 +263,7 @@ class downloader:
                 return True
         except Exception as e:
             self.stop_loading_thread()
-            print(f"Error! {e}")
+            logging.warning(f"Error! {e}")
             return False
 
 

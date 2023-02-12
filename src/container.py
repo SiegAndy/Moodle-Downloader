@@ -3,7 +3,7 @@ import json
 from typing import Dict, List
 
 from bs4 import Tag
-from src.utils.enum import mod_type
+from src.utils.enums import mod_type
 
 
 class url:

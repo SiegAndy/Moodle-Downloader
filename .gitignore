@@ -129,5 +129,5 @@ dmypy.json
 .pyre/
 
 /files
-/test
+*test*
 .vscode/settings.json
