@@ -1,9 +1,17 @@
-from .enums import custom_enum, extraction_mode, extract_file_mode, mod_type
-from .func import checksum, progress_bar, dict_to_str, check_config, load_config
+from .enums import custom_enum, extract_file_mode, extraction_mode, mod_type
+from .func import (
+    check_config,
+    checksum,
+    cleanup_prev_line,
+    dict_to_str,
+    load_config,
+    progress_bar,
+)
 from .params import (
+    EXTRACT_FILE_MODE,
+    EXTRACTION_MODE,
+    config_path,
     href_header,
     moodle_course_url,
-    config_path,
-    EXTRACTION_MODE,
-    EXTRACT_FILE_MODE,
+    terminal_cols,
 )

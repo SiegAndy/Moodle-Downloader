@@ -1,11 +1,18 @@
 import logging
+import logging.config
 import os
 from typing import Dict
 
-from src.extractor import extractor
-from src.utils import mod_type, custom_enum, check_config, load_config
 from src.downloader import downloader
-from src.utils.enums import extract_file_mode, extraction_mode
+from src.extractor import extractor
+from src.utils import (
+    custom_enum,
+    extract_file_mode,
+    extraction_mode,
+    load_config,
+    mod_type,
+    terminal_cols,
+)
 
 info_dict_path = "info.json"
 
@@ -18,7 +25,13 @@ class constructor:
     info_dict: Dict[str, Dict]
     config: Dict[str, custom_enum | str]
 
-    def __init__(self, class_id: str, store_dir: str, target_website: str) -> None:
+    def __init__(
+        self,
+        class_id: str,
+        store_dir: str,
+        target_website: str,
+        config: str = "./log_config.ini",
+    ) -> None:
         self.class_id = class_id
         self.store_dir = store_dir
         self.fixed_resource_store_dir = os.path.join(store_dir, "Resources")
@@ -33,6 +46,12 @@ class constructor:
             if self.config["extract_file_mode"] != extract_file_mode.UnderSection:
                 if not os.path.isdir(self.fixed_resource_store_dir):
                     os.makedirs(self.fixed_resource_store_dir)
+            if not os.path.isdir("./src/data/"):
+                os.makedirs("./src/data/")
+            if not os.path.isfile("./src/data/log_file.log"):
+                with open("./src/data/log_file.log", "w") as f:
+                    pass
+            logging.config.fileConfig(config)
         except Exception as e:
             raise ValueError(
                 "Error! Unable to create root directory! Please make sure you have privilege role!"
@@ -118,6 +137,8 @@ class constructor:
                 pass
 
     def construct_sections(self, index: int = -1) -> None:
+        print("#" * int(terminal_cols * 3 / 4))
+        print(f"Downloading Course: '{self.info_dict['course-title']}'")
         info_param = {
             "file_index": -1,
             "section_index": -1,
@@ -127,13 +148,22 @@ class constructor:
             "url_file_extension": "",
         }
 
-        for section_index, (section_id, section) in enumerate(self.info_dict.items()):
-            if index != -1 and index != section_index:
+        for section_index, (section_id, section) in enumerate(
+            self.info_dict.items(), start=-1
+        ):
+            if section_index == -1 or (index != -1 and index != section_index):
                 continue
             info_param["section_index"] = section_index
             info_param["section_title"] = section["title"]
             info_param["section_file_index"] = -1
+            print("#" * int(terminal_cols / 2))
+            print(f"Section {section_index} '{section['title']}': Downloading")
             self.construct_section(info_param=info_param, section=section)
+            print(f"Section {section_index} '{section['title']}': Downloaded")
+
+        print("#" * int(terminal_cols / 2))
+        print(f"Download Complete! Downloaded File are stored in '{self.store_dir}'.")
+        print("#" * int(terminal_cols * 3 / 4))
 
     def construction(self, index: int = -1) -> None:
         return self.construct_sections(index)

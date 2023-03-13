@@ -1,3 +1,8 @@
+import os
+
+# width of the terminal can use for printout
+terminal_cols = os.get_terminal_size().columns
+
 config_path = ".config"
 
 # type, id

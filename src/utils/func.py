@@ -1,9 +1,19 @@
-from ctypes import Union
 import logging
 from typing import Any, Dict, Tuple, Type
 
-from src.utils.params import config_path
 from src.utils.enums import custom_enum, extract_file_mode, extraction_mode
+from src.utils.params import config_path, terminal_cols
+
+
+def cleanup_prev_line(num_lines: int = 1) -> None:
+    if num_lines < 1:
+        return
+    if num_lines == 1:
+        print("\033[K", end="\r")
+        return
+    for i in range(num_lines):
+        print("\033[F\033[1G\033[K", end="")
+    print("\033[K", end="\r")
 
 
 def checksum(input: str | bytes, num: int = 8) -> str:
@@ -30,20 +40,25 @@ def get_unit(value: int) -> Tuple[str, str]:
     return format(value, f".{r_digits}f"), unit
 
 
-def progress_bar(current, total, bar_length=20, string_in_front: str = ""):
+def progress_bar(current, total, bar_length=-1, string_in_front: str = ""):
     fraction = current / total
-
-    arrow = int(fraction * bar_length - 1) * "-" + ">"
-    padding = int(bar_length - len(arrow)) * " "
-
-    ending = "\n" if current == total else "\r"
 
     division = "{} {}/ {} {}".format(*get_unit(current), *get_unit(total))
 
     division = "{:^24}".format(division)
 
+    front_length = len(string_in_front)
+    latter_length = 40
+    bar_length = max(20, terminal_cols - front_length - latter_length)
+
+    arrow = int(fraction * bar_length - 1) * "-" + ">"
+    padding = int(bar_length - len(arrow)) * " "
+
+    ending = "\n" if current == total else "\r"
+    # alignment = "{" + f":>{terminal_cols - len(front_print_out)}" + "}"
+
     return (
-        f"{string_in_front}{division}: [{arrow}{padding}] {int(fraction*100)}% ",
+        f"{string_in_front}: [{arrow}{padding}] {division} {int(fraction*100)}%",
         ending,
     )
 

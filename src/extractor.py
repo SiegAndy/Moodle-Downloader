@@ -1,13 +1,20 @@
+import json
+import os
 from collections import defaultdict
 from http.cookies import CookieError
-import json
-import logging
 from typing import Any, Dict, List
-from bs4 import BeautifulSoup, Tag
 
 import requests
-from src.utils import moodle_course_url, href_header, checksum
+from bs4 import BeautifulSoup, Tag
+
 from src.cookie_reader import retreive_cookies
+from src.utils import (
+    checksum,
+    cleanup_prev_line,
+    href_header,
+    moodle_course_url,
+    terminal_cols,
+)
 
 
 class extractor:
@@ -55,19 +62,21 @@ class extractor:
                 "Invalid Cookie! Please login to the Moodle First, and then try to retreive all the contents!"
             )
         else:
-            logging.info("")
-            logging.info(
-                "-" * 20
-                + "''{:^80}''".format(
-                    f"Retrieving Course: '{res_title.split(':')[1].strip(' ')}'"
-                )
-                + "-" * 20
-            )
+            print("#" * int(terminal_cols * 3 / 4))
+            print(f"Retrieving Course: '{res_title.split(':')[1].strip(' ')}'")
+            # logging.info("")
+            # logging.info(
+            #     "-" * 20
+            #     + "''{:^80}''".format(
+            #         f"Retrieving Course: '{res_title.split(':')[1].strip(' ')}'"
+            #     )
+            #     + "-" * 20
+            # )
         # with open ("files/unlogin.html", 'w', encoding='utf-8') as f:
         #     f.write(soup.prettify())
-
-        sections: List[Tag] = soup.find_all("li", class_="section main clearfix")
         self.info_dict.clear()
+        self.info_dict["course-title"] = res_title
+        sections: List[Tag] = soup.find_all("li", class_="section main clearfix")
         for index, section in enumerate(sections):
             section_title = section["aria-label"]
             self.info_dict[section["id"]]["title"] = section_title
@@ -77,11 +86,13 @@ class extractor:
             if self.extract_section_index != -1 and self.extract_section_index != index:
                 continue
 
-            logging.info(
-                "-" * 20
-                + "''{:^80}''".format(f"Retrieving Section {index}: '{section_title}'")
-                + "-" * 20
-            )
+            print("#" * int(terminal_cols / 2))
+            print(f"Retrieving Section {index}: '{section_title}'", end="\r")
+            # logging.info(
+            #     "-" * 20
+            #     + "''{:^80}''".format(f"Retrieving Section {index}: '{section_title}'")
+            #     + "-" * 20
+            # )
 
             section_page_elements = section.find(id=f"collapse-{index}")
 
@@ -90,17 +101,22 @@ class extractor:
             )
 
             if len(self.info_dict[section["id"]]["items"].items()) > 0:
-                msg = f" Retrieved Section {index}: '{section_title}'"
+                msg = f"Retrieved Section {index}: '{section_title}'"
             else:
                 msg = f"Fail to Retrieved Section {index}: '{section_title}'.\nDetail: Section not containing files."
-            logging.info("-" * 20 + "''{:^80}''".format(msg) + "-" * 20)
+            # logging.info("-" * 20 + "''{:^80}''".format(msg) + "-" * 20)
+            cleanup_prev_line()
+            print(msg)
 
-        logging.info(
-            "-" * 20
-            + "''{:^80}''".format("Retrieval Complete! Now Downloading Files...")
-            + "-" * 20
-        )
-        logging.info("")
+        print("#" * int(terminal_cols / 2))
+        print("Retrieval Complete! Now Downloading Files...")
+        print("#" * int(terminal_cols * 3 / 4))
+        # logging.info(
+        #     "-" * 20
+        #     + "''{:^80}''".format("Retrieval Complete! Now Downloading Files...")
+        #     + "-" * 20
+        # )
+        # logging.info("")
 
         with open(self.store_path, "w", encoding="utf-8") as record:
             record.write(json.dumps(self.info_dict, indent=4))

@@ -1,10 +1,11 @@
+import base64
+import json
 import logging
 import os
-import json
 import sqlite3
-import base64
-import win32crypt
 from typing import ByteString, Dict
+
+import win32crypt
 from Crypto.Cipher import AES
 
 
@@ -41,15 +42,16 @@ def retreive_cookies(target_website: str, debug: bool = False) -> Dict[str, str]
     cookie_file = r"%LocalAppData%\Google\Chrome\User Data\Default\Network\Cookies"
     cookie_file = os.path.expandvars(cookie_file)
     connection = sqlite3.connect(cookie_file)
+    connection.text_factory = bytes
     cursor = connection.cursor()
     cursor.execute("SELECT * FROM cookies;")
     entries = cursor.fetchall()
 
     cookies = dict()
     for curr in entries:
-        site = curr[1]
-        name = curr[3]
-        encrypted_value = bytes(curr[5])
+        site = curr[1].decode("utf-8", errors="ignore")
+        name = curr[3].decode("utf-8", errors="ignore")
+        encrypted_value = curr[5]
         is_site = site.find(target_website) > -1
         if is_site:
             decrypted_value = retreive_cookie_value(encrypted_value, decrypted_key)

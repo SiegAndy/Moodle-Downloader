@@ -1,8 +1,9 @@
-from enum import Enum
 import json
+from enum import Enum
 from typing import Dict, List
 
 from bs4 import Tag
+
 from src.utils.enums import mod_type
 
 

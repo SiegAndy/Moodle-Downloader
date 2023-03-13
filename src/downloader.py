@@ -1,19 +1,18 @@
 # Partial Modified Code from Package file-downloader "https://pypi.org/project/file-downloader/"
 
-from io import BufferedReader
 import logging
-from math import floor
 import os
 import traceback
-import requests
-from requests import Response, Request
+from io import BufferedReader
+from math import floor
 from threading import Event, Thread
+from time import sleep, time
 from typing import Callable, Dict
-from time import time, sleep
 
+import requests
+from requests import Response
 
-from src.utils.func import progress_bar
-from src.cookie_reader import retreive_cookies
+from src.utils import cleanup_prev_line, progress_bar
 
 
 class loading(Thread):
@@ -176,10 +175,11 @@ class downloader:
                         continue
                     file_obj.write(chunk)
                     self.fetched_length += len(chunk)
+
                     print_out, ending = progress_bar(
                         current=self.fetched_length,
                         total=self.content_length,
-                        string_in_front=f"Extracting File: {self.file_name:>40}: ",
+                        string_in_front=f"Extracting File: {self.file_name:>30}",
                     )
                     print(print_out, end=ending)
                 except Exception:
@@ -187,7 +187,9 @@ class downloader:
                     self.__retry()
             file_obj.close()
             self.downloaded = True
-            logging.info(f"File Downloaded: {self.store_path}")
+            # logging.info(f"File Downloaded: {self.store_path}")
+            # cleanup_prev_line(1)
+            print(f"File Downloaded: '{self.store_path}'")
             if call_back:
                 call_back(cursize=self.fetched_length)
         except Exception:

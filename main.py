@@ -1,7 +1,4 @@
-import logging, logging.config
-from src import extractor, constructor
-
-logging.config.fileConfig("log_config.ini")
+from src import constructor, extractor
 
 mod_type = {
     "assign": "assignment",
@@ -28,5 +25,5 @@ if __name__ == "__main__":
     # extractor(**inputs)
 
     content = constructor(**inputs)
-    content.extraction()
-    content.construct_sections()
+    content.extraction(0)
+    content.construct_sections(0)
