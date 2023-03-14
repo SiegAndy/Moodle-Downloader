@@ -12,6 +12,10 @@
         Options are: [UnderSection, InOneFolder, Both]
         Default:
             "EXTRACT_FILE_MODE=UnderSection"
+    ZIP_MODE: 
+        Options are: [ZIP, UNZIP]
+        Default:
+            "ZIP_MODE=ZIP"
     FILENAME_FORMAT:
         Flags are: [
             "file_index",

@@ -1,5 +1,7 @@
 from enum import Enum
 
+import requests
+
 
 class custom_enum(Enum):
     @classmethod
@@ -13,6 +15,22 @@ class custom_enum(Enum):
             if not key.startswith("_") and type(value) == cls:
                 result.append(key)
         return result
+
+
+class request_method(custom_enum):
+    GET = "GET"
+    POST = "POST"
+
+    def get_req_method(self):
+        if self == request_method.GET:
+            return requests.get
+        elif self == request_method.POST:
+            return requests.post
+
+
+class zip_mode(custom_enum):
+    ZIP = "ZIP"
+    UNZIP = "UNZIP"
 
 
 class extraction_mode(custom_enum):

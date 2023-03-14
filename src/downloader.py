@@ -1,5 +1,6 @@
 # Partial Modified Code from Package file-downloader "https://pypi.org/project/file-downloader/"
 
+import json
 import logging
 import os
 import traceback
@@ -12,7 +13,7 @@ from typing import Callable, Dict
 import requests
 from requests import Response
 
-from src.utils import cleanup_prev_line, progress_bar
+from src.utils import progress_bar, request_method
 
 
 class loading(Thread):
@@ -58,12 +59,17 @@ class downloader:
         self,
         url: str,
         cookies: Dict[str, str],
+        method: request_method = request_method.GET,
+        params: Dict[str, str] = None,
         store_path: str = "",
         socket_timeout: float = 120.0,
         retry_limit: int = 5,
+        suppress_url_file_check: bool = False,
+        url_filename: str = "",
     ):
         self.url = url
         self.cookies = cookies
+        self.method = method.get_req_method()
         # self.cookies = dict_to_str(cookies)
         self.store_path = store_path
         self.socket_timeout = socket_timeout
@@ -80,12 +86,18 @@ class downloader:
             "allow_redirects": True,
         }
 
-        # self.start_loading_thread()
-        # sleep(5)
-        # self.stop_loading_thread()
-        # return
-        if not self.is_url_file_exists():
-            raise FileNotFoundError("Error! File is not found on the target url!")
+        if params is not None:
+            self.params.update(params)
+
+        if suppress_url_file_check:
+            if url_filename == "":
+                raise FileNotFoundError(
+                    "Error! Must specify url_filename when suppressing the url file check!"
+                )
+            self.file_name = url_filename
+        else:
+            if not self.is_url_file_exists():
+                raise FileNotFoundError("Error! File is not found on the target url!")
 
         self.content_length = self.get_content_length()
 
@@ -123,11 +135,19 @@ class downloader:
         Retrieve content-length from target url
         """
         try:
-            res: Response = requests.head(**self.params)
+            query_method = requests.head
+            if self.method == request_method.POST.get_req_method():
+                query_method = self.method
+            res: Response = query_method(**self.params)
             size = res.headers.get("content-length")
             if size is None or int(size) == 0:
+                with open("error.html", "w", encoding="utf-8") as f:
+                    f.write(res.content.decode("utf-8"))
                 raise ConnectionError(
-                    "Error! File is not found on the target url or File has no content!"
+                    "Error! File is not found on the target url or File has no content!\n"
+                    + f"Method: {self.method}; Params: \n{json.dumps(self.params, indent=4)} \n"
+                    + "response header: \n"
+                    + str(res.headers)
                 )
             self.content_length = int(size)
             return self.content_length
@@ -168,6 +188,7 @@ class downloader:
         Starts the download loop
         """
         try:
+            print()
             for chunk in url_obj.iter_content(chunk_size=8192):
                 try:
                     # filter out keep-alive new chunks
@@ -195,7 +216,12 @@ class downloader:
         except Exception:
             traceback.print_exc()
 
-    def download(self, download_path: str = None, call_back: Callable = None):
+    def download(
+        self,
+        download_path: str = None,
+        params: Dict = None,
+        call_back: Callable = None,
+    ):
         """
         Starts the file download
 
@@ -209,8 +235,13 @@ class downloader:
         self.progress = 0
         self.fetched_length = 0
         try:
+            if params is not None:
+                params.update(self.params)
+            else:
+                params = self.params
+
             with open(self.store_path, "wb") as file_obj:
-                res_obj: Response = requests.get(stream=True, **self.params)
+                res_obj: Response = self.method(stream=True, **params)
                 self.stop_loading_thread()
                 self.__download_file(
                     url_obj=res_obj, file_obj=file_obj, call_back=call_back
@@ -234,7 +265,13 @@ class downloader:
             logging.warning(f"Error! {e}")
             return False
 
-    def resume(self, restart: bool = False, call_back: Callable = None):
+    def resume(
+        self,
+        restart: bool = False,
+        method: request_method = request_method.GET,
+        params: Dict = None,
+        call_back: Callable = None,
+    ):
         """
         Starts the file download
 
@@ -243,19 +280,24 @@ class downloader:
         self.start_loading_thread()
         self.fetched_length = self.get_local_file_size()
         if restart:
-            return self.download()
+            return self.download(method=method, params=params)
         elif self.fetched_length >= self.content_length:
             logging.warning(
                 "Local File Larger than Cloud File. Potential Error Found, Redownloading..."
             )
-            return self.download()
+            return self.download(method=method, params=params)
         elif self.fetched_length == 0:
-            return self.download()
+            return self.download(method=method, params=params)
 
         try:
+            if params is not None:
+                params.update(self.params)
+            else:
+                params = self.params
+
             with open(self.store_path, "a+b") as file_obj:
                 header = {"Range": f"bytes={self.fetched_length}-{self.content_length}"}
-                res_obj: Response = requests.get(
+                res_obj: Response = self.method(
                     headers=header, stream=True, **self.params
                 )
                 self.stop_loading_thread()

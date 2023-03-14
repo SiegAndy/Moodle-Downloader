@@ -1,8 +1,88 @@
+import io
 import logging
+import os
+import re
+import shutil
+import traceback
+import unicodedata
+import zipfile
 from typing import Any, Dict, Tuple, Type
 
-from src.utils.enums import custom_enum, extract_file_mode, extraction_mode
+from src.utils.enums import custom_enum, extract_file_mode, extraction_mode, zip_mode
 from src.utils.params import config_path, terminal_cols
+
+
+def _unzip_nested_zip(zip_ref: zipfile.ZipFile, unzip_directory: str) -> None:
+    for member in zip_ref.namelist():
+        filename = os.path.basename(member)
+        # skip directories
+        target_file_name = os.path.join(unzip_directory, member)
+        if not filename and not os.path.isdir(target_file_name):
+            os.makedirs(target_file_name)
+            continue
+
+        source = zip_ref.open(member)
+        if ".zip" == os.path.splitext(filename)[-1]:
+            content = io.BytesIO(source.read())
+            nested_zip_ref = zipfile.ZipFile(content)
+            nested_dir = os.path.splitext(target_file_name)[0]
+            _unzip_nested_zip(nested_zip_ref, nested_dir)
+            target_file_name = os.path.join(nested_dir, filename)
+        try:
+            if not os.path.isfile(target_file_name):
+                target_file_dir = target_file_name.rstrip(filename)
+                if (
+                    target_file_dir is not None
+                    and target_file_dir != ""
+                    and not os.path.isdir(target_file_dir)
+                ):
+                    os.makedirs(target_file_dir)
+                if target_file_dir == target_file_name:
+                    continue
+            target = open(target_file_name, "wb")
+            with source, target:
+                source.seek(0)
+                shutil.copyfileobj(source, target)
+        except PermissionError as e:
+            # traceback.print_exc()
+            # logging.warning(f"Error! {str(e)}")
+            pass
+
+
+def unzip_file(target_zip: str, unzip_directory: str):
+    try:
+        if not os.path.isdir(unzip_directory):
+            os.makedirs(unzip_directory)
+        with zipfile.ZipFile(target_zip, "r") as zip_ref:
+            _unzip_nested_zip(zip_ref, unzip_directory)
+
+        file_name = target_zip.split(os.sep)[-1]
+        shutil.move(target_zip, os.path.join(unzip_directory, file_name))
+    except Exception as e:
+        traceback.print_exc()
+        logging.warning(f"Error! {str(e)}")
+
+
+def slugify(value, allow_unicode=False):
+    """
+    Code copied from https://github.com/django/django/blob/main/django/utils/text.py
+
+    Convert to ASCII if 'allow_unicode' is False. Convert spaces or repeated
+    dashes to single dashes. Remove characters that aren't alphanumerics,
+    underscores, or hyphens. Convert to lowercase. Also strip leading and
+    trailing whitespace, dashes, and underscores.
+    """
+    value = str(value)
+    if allow_unicode:
+        value = unicodedata.normalize("NFKC", value)
+    else:
+        value = (
+            unicodedata.normalize("NFKD", value)
+            .encode("ascii", "ignore")
+            .decode("ascii")
+        )
+    value = re.sub(r"[^\w\s-]", "", value.lower())
+    return re.sub(r"[-\s]+", "-", value).strip("-_")
 
 
 def cleanup_prev_line(num_lines: int = 1) -> None:
@@ -142,6 +222,8 @@ def load_config() -> Dict[str, Any]:
             value = enum_conversion(value=value, type=extraction_mode)
         elif tag == "extract_file_mode":
             value = enum_conversion(value=value, type=extract_file_mode)
+        elif tag == "zip_mode":
+            value = enum_conversion(value=value, type=zip_mode)
         elif tag == "filename_format":
             value = parse_file_format(value=value)
         elif value.lower() == "true":
@@ -154,6 +236,8 @@ def load_config() -> Dict[str, Any]:
         result["extraction_mode"] = extraction_mode.FileOnly
     if "extraction_mode" not in result:
         result["extract_file_mode"] = extract_file_mode.InOneFolder
+    if "zip_mode" not in result:
+        result["extract_file_mode"] = zip_mode.ZIP
     if "filename_format" not in result:
         result[
             "filename_format"

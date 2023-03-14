@@ -1,8 +1,7 @@
 import json
-import os
 from collections import defaultdict
 from http.cookies import CookieError
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import requests
 from bs4 import BeautifulSoup, Tag
@@ -11,7 +10,9 @@ from src.cookie_reader import retreive_cookies
 from src.utils import (
     checksum,
     cleanup_prev_line,
+    download_folder_url,
     href_header,
+    mod_type,
     moodle_course_url,
     terminal_cols,
 )
@@ -47,10 +48,8 @@ class extractor:
 
         self.info_dict = defaultdict(dict)
 
-    def extract_sections(self) -> Dict[str, Dict]:
-        res = requests.get(
-            moodle_course_url.format(self.class_id), cookies=self.login_cookie
-        )
+    def check_signin(self, url: str, cookies: Dict) -> Tuple[BeautifulSoup, str]:
+        res = requests.get(url, cookies=cookies)
         res_cont = res.content.decode(encoding="utf-8")
         # with open (path, 'r', encoding='utf-8') as f:
         #     res_cont = f.read()
@@ -61,21 +60,20 @@ class extractor:
             raise CookieError(
                 "Invalid Cookie! Please login to the Moodle First, and then try to retreive all the contents!"
             )
-        else:
-            print("#" * int(terminal_cols * 3 / 4))
-            print(f"Retrieving Course: '{res_title.split(':')[1].strip(' ')}'")
-            # logging.info("")
-            # logging.info(
-            #     "-" * 20
-            #     + "''{:^80}''".format(
-            #         f"Retrieving Course: '{res_title.split(':')[1].strip(' ')}'"
-            #     )
-            #     + "-" * 20
-            # )
+        return soup, res_title
+
+    def extract_sections(self) -> Dict[str, Dict]:
+        soup, page_title = self.check_signin(
+            url=moodle_course_url.format(self.class_id), cookies=self.login_cookie
+        )
+
+        print("#" * int(terminal_cols * 3 / 4))
+        print(f"Retrieving Course: '{page_title.split(':')[1].strip(' ')}'")
+
         # with open ("files/unlogin.html", 'w', encoding='utf-8') as f:
         #     f.write(soup.prettify())
         self.info_dict.clear()
-        self.info_dict["course-title"] = res_title
+        self.info_dict["course-title"] = page_title
         sections: List[Tag] = soup.find_all("li", class_="section main clearfix")
         for index, section in enumerate(sections):
             section_title = section["aria-label"]
@@ -88,11 +86,6 @@ class extractor:
 
             print("#" * int(terminal_cols / 2))
             print(f"Retrieving Section {index}: '{section_title}'", end="\r")
-            # logging.info(
-            #     "-" * 20
-            #     + "''{:^80}''".format(f"Retrieving Section {index}: '{section_title}'")
-            #     + "-" * 20
-            # )
 
             section_page_elements = section.find(id=f"collapse-{index}")
 
@@ -104,24 +97,37 @@ class extractor:
                 msg = f"Retrieved Section {index}: '{section_title}'"
             else:
                 msg = f"Fail to Retrieved Section {index}: '{section_title}'.\nDetail: Section not containing files."
-            # logging.info("-" * 20 + "''{:^80}''".format(msg) + "-" * 20)
+
             cleanup_prev_line()
             print(msg)
 
         print("#" * int(terminal_cols / 2))
         print("Retrieval Complete! Now Downloading Files...")
         print("#" * int(terminal_cols * 3 / 4))
-        # logging.info(
-        #     "-" * 20
-        #     + "''{:^80}''".format("Retrieval Complete! Now Downloading Files...")
-        #     + "-" * 20
-        # )
-        # logging.info("")
 
         with open(self.store_path, "w", encoding="utf-8") as record:
             record.write(json.dumps(self.info_dict, indent=4))
 
         return self.info_dict
+
+    def extract_folder_info(self, item_info: Dict) -> None:
+        soup, page_title = self.check_signin(
+            url=href_header.format(mod_type.folder.name, item_info["id"]),
+            cookies=self.login_cookie,
+        )
+        forms: List[Tag] = soup.find_all("form", attrs={"method": "post"})
+        file_section = soup.find("section", attrs={"id": "region-main"})
+        for form in forms:
+            if "download_folder" not in form.attrs["action"]:
+                continue
+            inputs = form.find_all("input")
+            if "detail" not in item_info:
+                item_info["detail"] = dict()
+                item_info["detail"]["checksum"] = checksum(file_section)
+            if "post_params" not in item_info["detail"]:
+                item_info["detail"]["post_params"] = dict()
+            for input in inputs:
+                item_info["detail"]["post_params"][input["name"]] = input["value"]
 
     def extract_section_info(
         self, section_page_elements: Tag, section_info: Dict
@@ -143,10 +149,13 @@ class extractor:
 
             # ['activity', 'url', 'modtype_url']
             item_info["type"] = elem["class"][1]
+
             item_info["title"] = (
                 elem.find("span", class_="instancename").contents[0].text
             )
             item_info["link"] = href_header.format(item_info["type"], elem_id)
+            if item_info["type"] == mod_type.folder.name:
+                self.extract_folder_info(item_info=item_info)
             # check if there is a text to describe the link/content
             activity_instance = elem.find("div", class_="activityinstance")
             siblings = [

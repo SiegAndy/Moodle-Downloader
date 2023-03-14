@@ -7,12 +7,17 @@ from src.downloader import downloader
 from src.extractor import extractor
 from src.utils import (
     custom_enum,
+    download_folder_url,
     extract_file_mode,
     extraction_mode,
     load_config,
     mod_type,
+    request_method,
+    slugify,
     terminal_cols,
+    zip_mode,
 )
+from src.utils.func import unzip_file
 
 info_dict_path = "info.json"
 
@@ -73,6 +78,7 @@ class constructor:
     def format_filename(self, info_param: Dict[str, int | str]) -> str:
         try:
             input_param = info_param.copy()
+            input_param["url_filename"] = slugify(input_param["url_filename"])
             input_param["file_index"] = format(info_param["file_index"], "02d")
             input_param["section_index"] = format(info_param["section_index"], "02d")
             input_param["section_file_index"] = format(
@@ -81,6 +87,25 @@ class constructor:
             return self.config["filename_format"].format(**input_param)
         except Exception as e:
             logging.warning(f"Error! Unable to Format Filename. Detail: {e}")
+
+    def construct_file(self, target: Dict, info_param: Dict) -> downloader:
+        the_downloader = downloader(url=target["link"], cookies=self.cookie)
+        info_param["url_filename"] = the_downloader.file_name
+        info_param["url_file_extension"] = the_downloader.file_name.split(".")[-1]
+        return the_downloader
+
+    def construct_folder(self, target: Dict, info_param: Dict) -> downloader:
+        info_param["url_filename"] = target["title"]
+        the_downloader = downloader(
+            url=download_folder_url,
+            cookies=self.cookie,
+            method=request_method.POST,
+            params={"data": target["detail"]["post_params"]},
+            suppress_url_file_check=True,
+            url_filename=info_param["url_filename"],
+        )
+        info_param["url_file_extension"] = "zip"
+        return the_downloader
 
     def construct_section(
         self, info_param: Dict[str, int | str], section: Dict[str, Dict]
@@ -104,37 +129,41 @@ class constructor:
                 info_param["section_file_index"] += 1
 
             if item["type"] == mod_type.resource.name:
+                curr_downloader = self.construct_file(
+                    target=item, info_param=info_param
+                )
+            elif item["type"] == mod_type.folder.name:
+                curr_downloader = self.construct_folder(
+                    target=item, info_param=info_param
+                )
+            else:
+                continue
+
+            if self.config["extraction_mode"] != extraction_mode.All:
                 info_param["file_index"] += 1
                 info_param["section_file_index"] += 1
-                curr_downloader = downloader(url=item["link"], cookies=self.cookie)
-                info_param["url_filename"] = curr_downloader.file_name
-                info_param["url_file_extension"] = curr_downloader.file_name.split(".")[
-                    -1
-                ]
+            file_name = self.format_filename(info_param=info_param)
+            if (
+                self.config["extract_file_mode"] == extract_file_mode.Both
+                or self.config["extract_file_mode"] == extract_file_mode.UnderSection
+            ):
+                file_paths = [os.path.join(dir_name, file_name)]
+                curr_downloader.download(download_path=file_paths[0])
+                if self.config["extract_file_mode"] == extract_file_mode.Both:
+                    file_paths.append(
+                        os.path.join(self.fixed_resource_store_dir, file_name)
+                    )
+                    curr_downloader.duplicate(new_file_path=file_paths[1])
+            elif self.config["extract_file_mode"] == extract_file_mode.InOneFolder:
+                file_paths = [os.path.join(self.fixed_resource_store_dir, file_name)]
+                curr_downloader.download(download_path=file_paths[0])
 
-                file_name = self.format_filename(info_param=info_param)
-                if (
-                    self.config["extract_file_mode"] == extract_file_mode.Both
-                    or self.config["extract_file_mode"]
-                    == extract_file_mode.UnderSection
-                ):
-                    curr_downloader.download(
-                        download_path=os.path.join(dir_name, file_name)
-                    )
-                    if self.config["extract_file_mode"] == extract_file_mode.Both:
-                        curr_downloader.duplicate(
-                            new_file_path=os.path.join(
-                                self.fixed_resource_store_dir, file_name
-                            )
-                        )
-                elif self.config["extract_file_mode"] == extract_file_mode.InOneFolder:
-                    curr_downloader.download(
-                        download_path=os.path.join(
-                            self.fixed_resource_store_dir, file_name
-                        )
-                    )
-            else:
-                pass
+            if (
+                info_param["url_file_extension"] == "zip"
+                and self.config["zip_mode"] == zip_mode.UNZIP
+            ):
+                for file_path in file_paths:
+                    unzip_file(target_zip=file_path, unzip_directory=file_path[:-4])
 
     def construct_sections(self, index: int = -1) -> None:
         print("#" * int(terminal_cols * 3 / 4))
