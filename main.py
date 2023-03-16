@@ -25,5 +25,5 @@ if __name__ == "__main__":
     # extractor(**inputs)
 
     content = constructor(**inputs)
-    content.extraction()
-    content.construct_sections()
+    content.extraction(0)
+    content.construct_sections(0)

@@ -130,19 +130,26 @@ class downloader:
             return False
         return True
 
-    def get_content_length(self) -> int:
+    def get_content_length(self, query_method=None) -> int:
         """
         Retrieve content-length from target url
+
+        If target is a web page, return -1
         """
         try:
-            query_method = requests.head
-            if self.method == request_method.POST.get_req_method():
-                query_method = self.method
+            if query_method is None:
+                query_method = requests.head
+                if self.method == request_method.POST.get_req_method():
+                    query_method = self.method
             res: Response = query_method(**self.params)
             size = res.headers.get("content-length")
+            res_type = res.headers.get("Content-Type")
+            if res_type is not None and "text/html" in res_type:
+                self.content_length = -1
+                return -1
             if size is None or int(size) == 0:
-                with open("error.html", "w", encoding="utf-8") as f:
-                    f.write(res.content.decode("utf-8"))
+                # with open("error.html", "w", encoding="utf-8") as f:
+                #     f.write(res.content.decode("utf-8"))
                 raise ConnectionError(
                     "Error! File is not found on the target url or File has no content!\n"
                     + f"Method: {self.method}; Params: \n{json.dumps(self.params, indent=4)} \n"
@@ -209,10 +216,14 @@ class downloader:
             file_obj.close()
             self.downloaded = True
             # logging.info(f"File Downloaded: {self.store_path}")
+            if self.content_length == -1:
+                print()
             # cleanup_prev_line(1)
             print(f"File Downloaded: '{self.store_path}'")
             if call_back:
                 call_back(cursize=self.fetched_length)
+            print()
+
         except Exception:
             traceback.print_exc()
 

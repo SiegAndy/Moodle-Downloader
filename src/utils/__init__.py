@@ -1,7 +1,7 @@
 from .enums import (
     custom_enum,
-    extract_file_mode,
-    extraction_mode,
+    download_mode,
+    file_mode,
     mod_type,
     request_method,
     zip_mode,
@@ -17,11 +17,10 @@ from .func import (
     unzip_file,
 )
 from .params import (
-    EXTRACT_FILE_MODE,
-    EXTRACTION_MODE,
     config_path,
     download_folder_url,
-    href_header,
+    view_url,
+    launch_url,
     moodle_course_url,
     terminal_cols,
 )

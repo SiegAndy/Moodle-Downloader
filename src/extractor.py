@@ -10,8 +10,8 @@ from src.cookie_reader import retreive_cookies
 from src.utils import (
     checksum,
     cleanup_prev_line,
-    download_folder_url,
-    href_header,
+    view_url,
+    launch_url,
     mod_type,
     moodle_course_url,
     terminal_cols,
@@ -43,6 +43,7 @@ class extractor:
                     "Error! Missing target website url, need to specify one of [target_website, login_cookie]!"
                 )
             self.login_cookie = retreive_cookies(target_website=target_website)
+            print(json.dumps(self.login_cookie, indent=4))
         else:
             self.login_cookie = login_cookie
 
@@ -112,7 +113,7 @@ class extractor:
 
     def extract_folder_info(self, item_info: Dict) -> None:
         soup, page_title = self.check_signin(
-            url=href_header.format(mod_type.folder.name, item_info["id"]),
+            url=view_url.format(mod_type.folder.name, item_info["id"]),
             cookies=self.login_cookie,
         )
         forms: List[Tag] = soup.find_all("form", attrs={"method": "post"})
@@ -128,6 +129,31 @@ class extractor:
                 item_info["detail"]["post_params"] = dict()
             for input in inputs:
                 item_info["detail"]["post_params"][input["name"]] = input["value"]
+
+    def extract_lti_info(self, item_info: Dict) -> None:
+        # reach lti redirect form page
+        soup, page_title = self.check_signin(
+            url=launch_url.format(mod_type.lti.name, item_info["id"]),
+            cookies=self.login_cookie,
+        )
+        # retreive the form
+        form: Tag = soup.find(
+            "form",
+            attrs={"name": "ltiLaunchForm", "id": "ltiLaunchForm", "method": "post"},
+        )
+        # retreive the target url from form
+        lti_url = form["action"]
+        # retreive the post params from form
+        inputs = form.find_all("input")
+        detail = dict()
+        for input in inputs:
+            detail[input["name"]] = input["value"]
+        if "detail" not in item_info:
+            item_info["detail"] = dict()
+            item_info["detail"]["checksum"] = checksum(form)
+        if "post_params" not in item_info["detail"]:
+            item_info["detail"]["post_params"] = dict()
+        item_info["detail"]["post_params"] = detail
 
     def extract_section_info(
         self, section_page_elements: Tag, section_info: Dict
@@ -153,7 +179,7 @@ class extractor:
             item_info["title"] = (
                 elem.find("span", class_="instancename").contents[0].text
             )
-            item_info["link"] = href_header.format(item_info["type"], elem_id)
+            item_info["link"] = view_url.format(item_info["type"], elem_id)
             if item_info["type"] == mod_type.folder.name:
                 self.extract_folder_info(item_info=item_info)
             # check if there is a text to describe the link/content

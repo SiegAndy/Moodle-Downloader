@@ -4,18 +4,22 @@
 
 #### Put ".config" File Under Root Directory
 
-    EXTRACTION_MODE: 
+    DOWNLOAD_MODE: 
         Options are: [ALL, FileOnly]
         Default:
-            "EXTRACTION_MODE=FileOnly"
-    EXTRACT_FILE_MODE: 
+            "DOWNLOAD_MODE=FileOnly"
+    FILE_MODE: 
         Options are: [UnderSection, InOneFolder, Both]
         Default:
-            "EXTRACT_FILE_MODE=UnderSection"
+            "FILE_MODE=UnderSection"
     ZIP_MODE: 
         Options are: [ZIP, UNZIP]
         Default:
             "ZIP_MODE=ZIP"
+    PAGE_MODE: 
+        Options are: [HTML, PDF]
+        Default:
+            "PAGE_MODE=PDF"
     FILENAME_FORMAT:
         Flags are: [
             "file_index",

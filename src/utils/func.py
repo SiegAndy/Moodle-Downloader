@@ -8,8 +8,25 @@ import unicodedata
 import zipfile
 from typing import Any, Dict, Tuple, Type
 
-from src.utils.enums import custom_enum, extract_file_mode, extraction_mode, zip_mode
+from bs4 import BeautifulSoup
+from xhtml2pdf import pisa
+
+from src.utils.enums import custom_enum, download_mode, file_mode, page_mode, zip_mode
 from src.utils.params import config_path, terminal_cols
+
+
+def html_to_pdf(html_path: str) -> None:
+    filename_without_ext = os.path.splitext(html_path)[0]
+    src = open(html_path, "r", encoding="utf-8")
+    dst = open(f"{filename_without_ext}.pdf", "w+b")
+    with src, dst:
+        src = src.read()
+        soup = BeautifulSoup(src, "html.parser")
+        content = soup.find("div", {"role": "main"})
+        modified_src = f"<html><body>{content}</body></html>"
+        pisa_status = pisa.CreatePDF(modified_src, dest=dst)
+        dst.close()
+        return pisa_status.err
 
 
 def _unzip_nested_zip(zip_ref: zipfile.ZipFile, unzip_directory: str) -> None:
@@ -121,6 +138,10 @@ def get_unit(value: int) -> Tuple[str, str]:
 
 
 def progress_bar(current, total, bar_length=-1, string_in_front: str = ""):
+    is_total_unknown = False
+    if total == -1:
+        total = current
+        is_total_unknown = True
     fraction = current / total
 
     division = "{} {}/ {} {}".format(*get_unit(current), *get_unit(total))
@@ -134,7 +155,7 @@ def progress_bar(current, total, bar_length=-1, string_in_front: str = ""):
     arrow = int(fraction * bar_length - 1) * "-" + ">"
     padding = int(bar_length - len(arrow)) * " "
 
-    ending = "\n" if current == total else "\r"
+    ending = "\n" if current == total and not is_total_unknown else "\r"
     # alignment = "{" + f":>{terminal_cols - len(front_print_out)}" + "}"
 
     return (
@@ -218,12 +239,14 @@ def load_config() -> Dict[str, Any]:
     for line in config:
         tag, value = line.strip("\n").split("=")
         tag = tag.lower()
-        if tag == "extraction_mode":
-            value = enum_conversion(value=value, type=extraction_mode)
-        elif tag == "extract_file_mode":
-            value = enum_conversion(value=value, type=extract_file_mode)
+        if tag == "download_mode":
+            value = enum_conversion(value=value, type=download_mode)
+        elif tag == "file_mode":
+            value = enum_conversion(value=value, type=file_mode)
         elif tag == "zip_mode":
             value = enum_conversion(value=value, type=zip_mode)
+        elif tag == "page_mode":
+            value = enum_conversion(value=value, type=page_mode)
         elif tag == "filename_format":
             value = parse_file_format(value=value)
         elif value.lower() == "true":
@@ -232,12 +255,14 @@ def load_config() -> Dict[str, Any]:
             value = False
         result[tag] = value
 
-    if "extraction_mode" not in result:
-        result["extraction_mode"] = extraction_mode.FileOnly
-    if "extraction_mode" not in result:
-        result["extract_file_mode"] = extract_file_mode.InOneFolder
+    if "download_mode" not in result:
+        result["download_mode"] = download_mode.FileOnly
+    if "download_mode" not in result:
+        result["file_mode"] = file_mode.InOneFolder
     if "zip_mode" not in result:
-        result["extract_file_mode"] = zip_mode.ZIP
+        result["zip_mode"] = zip_mode.ZIP
+    if "page_mode" not in result:
+        result["page_mode"] = page_mode.PDF
     if "filename_format" not in result:
         result[
             "filename_format"

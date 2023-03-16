@@ -28,17 +28,22 @@ class request_method(custom_enum):
             return requests.post
 
 
+class page_mode(custom_enum):
+    HTML = "HTML"
+    PDF = "PDF"
+
+
 class zip_mode(custom_enum):
     ZIP = "ZIP"
     UNZIP = "UNZIP"
 
 
-class extraction_mode(custom_enum):
+class download_mode(custom_enum):
     All = "all"
     FileOnly = "FileOnly"
 
 
-class extract_file_mode(custom_enum):
+class file_mode(custom_enum):
     UnderSection = "UnderSection"
     InOneFolder = "InOneFolder"
     Both = "Both"
@@ -51,8 +56,9 @@ class mod_type(custom_enum):
     resource = "resource"
     url = "url"
     page = "page"
+    lti = "lti"
     forum = "forum"
     undefined = "undefined"
 
 
-# print(extract_file_mode.get_class_name())
+# print(file_mode.get_class_name())

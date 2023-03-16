@@ -5,19 +5,17 @@ from typing import Dict
 
 from src.downloader import downloader
 from src.extractor import extractor
-from src.utils import (
+from src.utils.enums import (
     custom_enum,
-    download_folder_url,
-    extract_file_mode,
-    extraction_mode,
-    load_config,
+    download_mode,
+    file_mode,
     mod_type,
+    page_mode,
     request_method,
-    slugify,
-    terminal_cols,
     zip_mode,
 )
-from src.utils.func import unzip_file
+from src.utils.func import load_config, slugify, unzip_file, html_to_pdf
+from src.utils.params import download_folder_url, terminal_cols
 
 info_dict_path = "info.json"
 
@@ -48,7 +46,7 @@ class constructor:
         try:
             if not os.path.isdir(self.store_dir):
                 os.makedirs(self.store_dir)
-            if self.config["extract_file_mode"] != extract_file_mode.UnderSection:
+            if self.config["file_mode"] != file_mode.UnderSection:
                 if not os.path.isdir(self.fixed_resource_store_dir):
                     os.makedirs(self.fixed_resource_store_dir)
             if not os.path.isdir("./src/data/"):
@@ -107,6 +105,17 @@ class constructor:
         info_param["url_file_extension"] = "zip"
         return the_downloader
 
+    def construct_page(self, target: Dict, info_param: Dict) -> downloader:
+        info_param["url_filename"] = target["title"]
+        the_downloader = downloader(
+            url=target["link"],
+            cookies=self.cookie,
+            suppress_url_file_check=True,
+            url_filename=info_param["url_filename"],
+        )
+        info_param["url_file_extension"] = "html"
+        return the_downloader
+
     def construct_section(
         self, info_param: Dict[str, int | str], section: Dict[str, Dict]
     ) -> None:
@@ -124,7 +133,7 @@ class constructor:
             )
 
         for item_id, item in section["items"].items():
-            if self.config["extraction_mode"] == extraction_mode.All:
+            if self.config["download_mode"] == download_mode.All:
                 info_param["file_index"] += 1
                 info_param["section_file_index"] += 1
 
@@ -136,25 +145,29 @@ class constructor:
                 curr_downloader = self.construct_folder(
                     target=item, info_param=info_param
                 )
+            elif item["type"] == mod_type.page.name:
+                curr_downloader = self.construct_page(
+                    target=item, info_param=info_param
+                )
             else:
                 continue
 
-            if self.config["extraction_mode"] != extraction_mode.All:
+            if self.config["download_mode"] != download_mode.All:
                 info_param["file_index"] += 1
                 info_param["section_file_index"] += 1
             file_name = self.format_filename(info_param=info_param)
             if (
-                self.config["extract_file_mode"] == extract_file_mode.Both
-                or self.config["extract_file_mode"] == extract_file_mode.UnderSection
+                self.config["file_mode"] == file_mode.Both
+                or self.config["file_mode"] == file_mode.UnderSection
             ):
                 file_paths = [os.path.join(dir_name, file_name)]
                 curr_downloader.download(download_path=file_paths[0])
-                if self.config["extract_file_mode"] == extract_file_mode.Both:
+                if self.config["file_mode"] == file_mode.Both:
                     file_paths.append(
                         os.path.join(self.fixed_resource_store_dir, file_name)
                     )
                     curr_downloader.duplicate(new_file_path=file_paths[1])
-            elif self.config["extract_file_mode"] == extract_file_mode.InOneFolder:
+            elif self.config["file_mode"] == file_mode.InOneFolder:
                 file_paths = [os.path.join(self.fixed_resource_store_dir, file_name)]
                 curr_downloader.download(download_path=file_paths[0])
 
@@ -164,6 +177,9 @@ class constructor:
             ):
                 for file_path in file_paths:
                     unzip_file(target_zip=file_path, unzip_directory=file_path[:-4])
+            elif item["type"] == "page" and self.config["page_mode"] == page_mode.PDF:
+                for file_path in file_paths:
+                    html_to_pdf(html_path=file_path)
 
     def construct_sections(self, index: int = -1) -> None:
         print("#" * int(terminal_cols * 3 / 4))
