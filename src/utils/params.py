@@ -15,3 +15,7 @@ moodle_course_url = "https://umass.moonami.com/course/view.php?id={}"
 download_folder_url = "https://umass.moonami.com/mod/folder/download_folder.php"
 
 launch_url = "https://umass.moonami.com/mod/{}/launch.php?id={}"
+
+
+# extract info is valid for one day
+modified_expire_time = 60 * 60 * 24

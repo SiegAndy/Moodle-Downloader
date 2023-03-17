@@ -11,7 +11,14 @@ from typing import Any, Dict, List, Tuple, Type
 from bs4 import BeautifulSoup
 from xhtml2pdf import pisa
 
-from src.utils.enums import custom_enum, download_mode, file_mode, page_mode, zip_mode
+from src.utils.enums import (
+    custom_enum,
+    download_mode,
+    file_mode,
+    page_mode,
+    video_mode,
+    zip_mode,
+)
 from src.utils.params import config_path, terminal_cols
 
 
@@ -247,6 +254,8 @@ def load_config() -> Dict[str, str | int | List]:
             value = enum_conversion(value=value, type=zip_mode)
         elif tag == "page_mode":
             value = enum_conversion(value=value, type=page_mode)
+        elif tag == "video_mode":
+            value = enum_conversion(value=value, type=video_mode)
         elif tag == "filename_format":
             value = parse_file_format(value=value)
         elif value.lower() == "true":
@@ -263,6 +272,8 @@ def load_config() -> Dict[str, str | int | List]:
         result["zip_mode"] = zip_mode.ZIP
     if "page_mode" not in result:
         result["page_mode"] = page_mode.PDF
+    if "video_mode" not in result:
+        result["video_mode"] = video_mode.ECHO360
     if "filename_format" not in result:
         result[
             "filename_format"

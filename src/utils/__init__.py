@@ -1,6 +1,6 @@
 from .enums import (
-    custom_enum,
     container_mode,
+    custom_enum,
     download_mode,
     file_mode,
     mod_type,
@@ -21,6 +21,7 @@ from .params import (
     config_path,
     download_folder_url,
     launch_url,
+    modified_expire_time,
     moodle_course_url,
     terminal_cols,
     view_url,

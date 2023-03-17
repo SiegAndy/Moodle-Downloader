@@ -1,6 +1,7 @@
 import json
 import os
 from collections import defaultdict
+from time import time
 from typing import Dict, List, Type
 
 from src.cookie_reader import retreive_cookies
@@ -34,7 +35,7 @@ class info:
 
 
 class item_info(info):
-    is_modified: bool
+    last_modified: int
     checksum: str
     id: str
     title: str
@@ -53,8 +54,8 @@ class item_info(info):
         detail: Dict = None,
         checksum: str = None,
         raw_content: str = None,
+        last_modified: int = None,
     ) -> None:
-        self.is_modified = False
         self.id = id
         self.title = title
         self.type = type
@@ -68,10 +69,12 @@ class item_info(info):
         self.checksum = checksum
         if raw_content is not None:
             self.checksum = checksum_func(raw_content)
+        self.last_modified = last_modified
+        if last_modified is None:
+            self.last_modified = time()
 
     @classmethod
     def from_json(cls, input_json: Dict) -> "item_info":
-        input_json.pop("is_modified", None)
         return cls(**input_json)
 
     def to_json(self) -> Dict:
@@ -79,20 +82,26 @@ class item_info(info):
 
 
 class section_info(info):
-    is_modified: bool
+    last_modified: int
     title: str
     checksum: str
     items: Dict[str, item_info]
 
     def __init__(
-        self, title: str = None, checksum: str = None, raw_content: str = None
+        self,
+        title: str = None,
+        checksum: str = None,
+        raw_content: str = None,
+        last_modified: int = None,
     ) -> None:
-        self.is_modified = False
         self.title = title
         self.checksum = checksum
         if raw_content is not None:
             self.checksum = checksum_func(raw_content)
         self.items = dict()
+        self.last_modified = last_modified
+        if last_modified is None:
+            self.last_modified = time()
 
     @property
     def items_length(self) -> int:
@@ -101,7 +110,6 @@ class section_info(info):
     @classmethod
     def from_json(cls, input_json: Dict) -> "section_info":
         items = input_json.pop("items", dict())
-        input_json.pop("is_modified", None)
         new_instance = cls(**input_json)
         for key, value in items.items():
             new_instance.items[key] = item_info.from_json(value)
@@ -137,7 +145,7 @@ class course_info(info):
         self.fixed_resource_store_dir = os.path.join(store_dir, fix_resource_store_dir)
         self.course_cookie = login_cookie
         self.mode = None
-        self.contents = defaultdict(dict)
+        self.contents = dict()
 
         self.config = load_config()
         self.try_load_prev_info_dict()
@@ -153,7 +161,7 @@ class course_info(info):
         if self.contents is not None:
             self.contents.clear()
         else:
-            self.contents = defaultdict(dict)
+            self.contents = dict()
 
     def __enter__(self) -> "course_info":
         return self

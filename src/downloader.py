@@ -240,6 +240,11 @@ class downloader:
         """
         if download_path != None:
             self.store_path = download_path
+
+        local_size = self.get_local_file_size()
+        if local_size >= self.content_length and self.content_length != -1:
+            print(f"[Status] File Exist, no need to download. {self.store_path}")
+            return True
         self.start_loading_thread()
         self.retry_num = 0
         self.progress = 0

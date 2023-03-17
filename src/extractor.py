@@ -1,4 +1,5 @@
 from http.cookies import CookieError
+from time import time
 from typing import Any, Dict, List, Tuple
 
 import requests
@@ -8,13 +9,16 @@ from src.container import course_info, item_info, section_info
 from src.module.folder import fetch_folder_params
 from src.module.lti import fetch_lti_params
 from src.utils import (
+    checksum,
     cleanup_prev_line,
     launch_url,
     mod_type,
+    modified_expire_time,
     moodle_course_url,
     terminal_cols,
     view_url,
 )
+from src.utils.func import checksum
 
 
 class extractor:
@@ -35,8 +39,8 @@ class extractor:
         res = requests.get(url, cookies=cookies)
         res_cont = res.content.decode(encoding="utf-8")
         soup = BeautifulSoup(res_cont, "html.parser")
-        with open("./test/test.html", "w", encoding="utf-8") as f:
-            f.write(soup.prettify())
+        # with open("./test/test.html", "w", encoding="utf-8") as f:
+        #     f.write(soup.prettify())
         if not check_title:
             return soup, ""
 
@@ -45,6 +49,10 @@ class extractor:
             raise CookieError(
                 "Invalid Cookie! Please login to the Moodle First, and then try to retreive all the contents!"
             )
+        elif "Error" in res_title:
+            raise Exception(
+                "Invalid Course ID! Please check you have entered correct course ID!"
+            )
         return soup, res_title
 
     def extract_sections(self) -> None:
@@ -52,6 +60,8 @@ class extractor:
             url=moodle_course_url.format(self.container.course_id),
             cookies=self.container.course_cookie,
         )
+        # with open("./test2/html.html", "w", encoding="UTF-8") as f:
+        #     f.write(soup.prettify())
 
         print("#" * int(terminal_cols * 3 / 4))
         print(f"Retrieving Course: '{page_title.split(':')[1].strip(' ')}'")
@@ -64,7 +74,26 @@ class extractor:
         sections: List[Tag] = soup.find_all("li", class_="section main clearfix")
         for index, section in enumerate(sections):
             section_title = section["aria-label"]
-            curr_section = section_info(title=section_title, raw_content=section)
+            section_index = f"section-{index}"
+
+            curr_section = None
+            if section_index in self.container.contents:
+                curr_section = self.container.contents[section_index]
+            if isinstance(curr_section, section_info):
+                if (
+                    curr_section.checksum != checksum(section)
+                    or time() - curr_section.last_modified > modified_expire_time
+                ):
+                    curr_section = section_info(
+                        title=section_title, raw_content=section
+                    )
+                else:
+                    print(
+                        f"[Status] No Modification to Section {index}: {section_title}"
+                    )
+                    continue
+            else:
+                curr_section = section_info(title=section_title, raw_content=section)
 
             if self.extract_section_index != -1 and self.extract_section_index != index:
                 continue
@@ -75,7 +104,6 @@ class extractor:
             section_page_elements = section.find(id=f"collapse-{index}")
 
             self.extract_section_info(section_page_elements, curr_section)
-
             self.container.contents[f"section-{index}"] = curr_section
             if curr_section.items_length > 0:
                 msg = f"Retrieved Section {index}: '{section_title}'"
@@ -122,13 +150,34 @@ class extractor:
             elem_id = elem["id"].split("-")[1]
             # ['activity', 'url', 'modtype_url']
             curr_type = elem["class"][1]
-            curr_item = item_info(
-                id=elem_id,
-                title=elem.find("span", class_="instancename").contents[0].text,
-                type=curr_type,
-                link=view_url.format(curr_type, elem_id),
-                raw_content=elem,
-            )
+
+            curr_item = None
+            item_block = elem.find("span", class_="instancename")
+            if item_block is None:
+                continue
+            if elem_id in curr_section.items:
+                curr_item = curr_section.items[elem_id]
+            if isinstance(curr_item, item_info):
+                if (
+                    curr_item.checksum != checksum(elem)
+                    or time() - curr_item.last_modified > modified_expire_time
+                ):
+                    curr_item = item_info(
+                        id=elem_id,
+                        title=elem.find("span", class_="instancename").contents[0].text,
+                        type=curr_type,
+                        link=view_url.format(curr_type, elem_id),
+                        raw_content=elem,
+                    )
+            else:
+                curr_item = item_info(
+                    id=elem_id,
+                    title=elem.find("span", class_="instancename").contents[0].text,
+                    type=curr_type,
+                    link=view_url.format(curr_type, elem_id),
+                    raw_content=elem,
+                )
+
             if curr_item.type == mod_type.folder.name:
                 self.extract_folder_info(curr_item=curr_item)
             elif curr_item.type == mod_type.lti.name:
@@ -145,7 +194,7 @@ class extractor:
             curr_section.items[elem_id] = curr_item
             for sibling in siblings:
                 curr_item.content.append(sibling.get_text().replace("\xa0", ""))
-
+            # break
         return curr_section
 
     def __call__(

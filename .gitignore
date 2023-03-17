@@ -130,4 +130,6 @@ dmypy.json
 
 /files
 *test*
+*backup*
+course-*
 .vscode/settings.json

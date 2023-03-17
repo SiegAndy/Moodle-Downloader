@@ -37,6 +37,11 @@ class request_method(custom_enum):
             return requests.post
 
 
+class video_mode(custom_enum):
+    ECHO360 = "ECHO360"
+    NONE = "NONE"
+
+
 class page_mode(custom_enum):
     HTML = "HTML"
     PDF = "PDF"

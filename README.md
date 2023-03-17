@@ -20,6 +20,10 @@
         Options are: [HTML, PDF]
         Default:
             "PAGE_MODE=PDF"
+    Video_MODE: 
+        Options are: [ECHO360, NONE]
+        Default:
+            "Video_MODE=ECHO360"
     FILENAME_FORMAT:
         Flags are: [
             "file_index",

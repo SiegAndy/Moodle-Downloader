@@ -3,10 +3,11 @@
 # https://content.echo360.org/0000.c4a29c15-265c-404e-9ed7-17f518602cf7/e6da5055-1fed-4f31-aea3-024cb7cc8d6c/1/hd2.mp4
 # https://thumbnails.echo360.org/0000.c4a29c15-265c-404e-9ed7-17f518602cf7/e6da5055-1fed-4f31-aea3-024cb7cc8d6c/1/poster1.jpg
 import json
+import os
 from pathlib import PurePosixPath
 from queue import Queue
-from time import sleep
-from typing import Callable, Dict, List
+from time import sleep, time
+from typing import Callable, Dict, List, Tuple
 from urllib.parse import unquote, urlparse
 
 import requests
@@ -14,11 +15,12 @@ from bs4 import BeautifulSoup, Tag
 from selenium import webdriver
 from selenium.webdriver.remote.webdriver import WebDriver as WebDriverClass
 
-from src.utils.func import cleanup_prev_line
 from src.utils.loading import loading
+from src.utils.params import modified_expire_time
 
 
 class Echo360Extractor:
+    last_modified = int
     base_url: str = "https://echo360.org/"
     video_base_url: str = "https://echo360.org/lesson/{}/classroom#sortDirection=desc"
     video_download_url_head: str = "https://content.echo360.org"
@@ -31,6 +33,8 @@ class Echo360Extractor:
     display_info_queue: Queue
     display_info_thread: loading
     container_mode: str
+    is_start_page_lesson: bool
+    no_need_to_fetch_new: bool
 
     def __init__(self, json_store_path: str = "./echo360.json"):
         self.json_store_path = json_store_path
@@ -39,6 +43,8 @@ class Echo360Extractor:
         self.cookies = []
         self.display_info_queue = None
         self.display_info_thread = None
+        self.is_start_page_lesson = False
+        self.no_need_to_fetch_new = False
 
     def __enter__(self):
         if self.display_info_thread is not None:
@@ -64,11 +70,83 @@ class Echo360Extractor:
             self.display_info_thread = None
 
         with open(self.json_store_path, "w", encoding="utf-8") as f:
+            self.last_modified = time()
+            general_info = dict()
+            general_info["last_modified"] = self.last_modified
+            general_info.update(self.to_json())
+            self.video_info["general"] = general_info
             f.write(json.dumps(self.video_info, indent=4))
 
-    def setup(self, redirect_url: str, cookie: Dict):
+    def setup(self, redirect_url: str, cookie: Dict) -> None:
+        self.no_need_to_fetch_new = self.check_existed_file()
+        self.display_message(
+            message=f"[Status] Need to Fetch Info: {not self.no_need_to_fetch_new}"
+        )
+        if self.no_need_to_fetch_new:
+            return
         self.fetch_echo360(redirect_url, cookie)
         self.setup_driver()
+        self.fix_course_url_id()
+
+    def validator(self) -> bool:
+        if self.course_id is None or self.course_id.startswith("G_"):
+            self.display_message(
+                message=f"[Error] Course ID not valid! '{self.course_id}'"
+            )
+            return False
+        if self.course_url is None:
+            self.display_message(message=f"[Error] Course URL does not exist!")
+            return False
+        if self.cookies is None:
+            self.display_message(message=f"[Error] Course Cookie does not exist!")
+            return False
+        return True
+
+    def check_existed_file(self) -> bool:
+        if not os.path.exists(self.json_store_path):
+            return False
+
+        self.display_message(
+            message=f"[Ongoing] Loading Previous Stored Info from {self.json_store_path}"
+        )
+        with open(self.json_store_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            if content == "":
+                self.display_message(
+                    message=f"[Finished] Previous Stored Info is Empty, Re-Fetching info"
+                )
+                return False
+            f.seek(0)
+            existed_json = json.load(f)
+            if "general" not in existed_json:
+                self.display_message(
+                    message=f"[Finished] Previous Stored Info is Malformatted, Re-Fetching info"
+                )
+                return False
+            general_info = existed_json["general"]
+            if (
+                "last_modified" in general_info
+                and time() - general_info["last_modified"] > modified_expire_time
+            ):
+                self.display_message(
+                    message=f"[Finished] Previous Stored Info Might Expired, Re-Fetching info"
+                )
+                return False
+            self.course_id = general_info["echo360-course-id"]
+            self.course_url = general_info["echo360-course-url"]
+            self.cookies = general_info["echo360-course-cookie"]
+            self.video_info = existed_json
+            validate_result = self.validator()
+            if not validate_result:
+                self.display_message(
+                    message=f"[Finished] Previous Stored Info is not valid, Re-Fetching info"
+                )
+                return False
+
+        self.display_message(
+            message=f"[Finished] Loading Previous Stored Info from {self.json_store_path}"
+        )
+        return True
 
     def get_cookie(self) -> Dict[str, str]:
         result = dict()
@@ -104,11 +182,6 @@ class Echo360Extractor:
         # fetch echo360 course url
         tmp = requests.post(url=target_url, data=data, allow_redirects=True)
         self.course_url = tmp.request.url
-        self.course_id = self.fetch_url_part(self.course_url, 2)
-        self.display_message(
-            message=f"[Ongoing] Echo360 Course Page {self.course_id}",
-            with_new_line=False,
-        )
 
         # retreive valid cookie from tmp request
         cookies_str = tmp.request.headers.get("Cookie").split(";")
@@ -135,9 +208,20 @@ class Echo360Extractor:
                     "sameSite": "None",
                 }
             self.cookies.append(curr_cookie)
+
+        self.course_id = self.fetch_url_part(self.course_url, 2)
+        if self.course_id.startswith("G_"):
+            # the link is to the individual course video rather course page
+            self.is_start_page_lesson = True
+
+        # self.display_message(
+        #     message=f"[Ongoing] Echo360 Course Page {self.course_id}",
+        #     with_new_line=False,
+        # )
+
         self.display_message(
-            message=f"[Finished] Echo360 Course Page {self.course_id}",
-            callback=lambda x: cleanup_prev_line(2),
+            message=f"[Finished] Echo360 Course Page",
+            # callback=lambda x: cleanup_prev_line(2),
         )
 
     def setup_driver(self) -> bool:
@@ -166,6 +250,25 @@ class Echo360Extractor:
         )
         return True
 
+    def fix_course_url_id(self) -> None:
+        self.display_message(message=f"[Ongoing] Fixing the course ID")
+        if not self.is_start_page_lesson:
+            return
+        soup, content = self.fetch_content(
+            target_url=self.course_url,
+            checking_callback=lambda x: self.fetch_url_part(x, 1) != "lesson",
+            target_tag="input",
+            target_attrs={"type": "hidden", "name": "sectionId"},
+            waiting_render_time=2,
+            retries=4,
+            get_parent=True,
+        )
+        self.course_id = content.get("value")
+        self.course_url = f"https://echo360.org/section/{self.course_id}/home"
+        self.display_message(
+            message=f"[Finished] Fixing the course ID: {self.course_id}"
+        )
+
     def fetch_content(
         self,
         target_url: str,
@@ -174,15 +277,17 @@ class Echo360Extractor:
         target_attrs: Dict = None,
         waiting_render_time: int = 2,
         retries: int = 4,
-    ) -> List[Tag]:
+        get_parent: bool = False,
+    ) -> Tuple[BeautifulSoup, List[Tag] | Tag]:
         if target_attrs is None:
             target_attrs = dict()
         wait_intervel = waiting_render_time
+        page = None
         while retries > 0:
             self.driver.get(target_url)
             sleep(wait_intervel)
             # print(target_url)
-            # with open("./test/lti5.html", "w", encoding="utf-8") as f:
+            # with open("./test2/lti.html", "w", encoding="utf-8") as f:
             #     f.write(self.driver.page_source)
             curr_page_url = self.driver.current_url
             # echo360 redirect page to other page rather than target page
@@ -190,13 +295,14 @@ class Echo360Extractor:
                 continue
             page = BeautifulSoup(self.driver.page_source, "html.parser")
             content = page.find(target_tag, attrs=target_attrs)
-
+            if get_parent:
+                return page, content
             if any(True for _ in content.children):
-                return content.children
+                return page, content.children
 
             wait_intervel *= 2
             retries -= 1
-        return []
+        return page, []
 
     def fetch_video_download_link(
         self,
@@ -208,7 +314,7 @@ class Echo360Extractor:
         self.display_message(
             message=f"[Ongoing] Fetching Video Info for {info_dict['date']} {info_dict['time']}"
         )
-        video_sections = self.fetch_content(
+        soup, video_sections = self.fetch_content(
             target_url=video_url,
             checking_callback=lambda x: self.fetch_url_part(x, 1) != "lesson",
             target_tag="div",
@@ -239,10 +345,12 @@ class Echo360Extractor:
         )
 
     def fetch_video_info(self, waiting_render_time: int = 2, retries: int = 4) -> None:
+        if self.no_need_to_fetch_new:
+            return
         self.display_message(
             message=f"[Ongoing] Fetching Video Info for course {self.course_id}"
         )
-        video_elements = self.fetch_content(
+        soup, video_elements = self.fetch_content(
             target_url=self.course_url,
             checking_callback=lambda x: self.fetch_url_part(x, -1) != "home",
             target_tag="div",
@@ -250,6 +358,7 @@ class Echo360Extractor:
             waiting_render_time=waiting_render_time,
             retries=retries,
         )
+
         if self.video_info is not None:
             self.video_info.clear()
         else:
@@ -283,11 +392,19 @@ class Echo360Extractor:
             )
             self.video_info["num_video"] += len(curr_info["videos"])
             self.video_info["videos"].append(curr_info)
-            if index == 1:
-                break
+            # if index == 1:
+            # break
         self.display_message(
             message=f"[Finished] Fetching Video Info for course {self.course_id}"
         )
+
+    @classmethod
+    def from_json(cls, input_json: Dict) -> "Echo360Extractor":
+        new_extractor = Echo360Extractor(input_json["echo360-course-store-path"])
+        new_extractor.course_id = input_json["echo360-course-id"]
+        new_extractor.course_url = input_json["echo360-course-url"]
+        new_extractor.cookies = input_json["echo360-course-cookie"]
+        return new_extractor
 
     def to_json(self) -> Dict:
         return {

@@ -14,16 +14,16 @@ cookies = {
     "MoodleSession": "qv1nirji59vpjlrha7n0g1am2i",
 }
 
-path = "test"
+path = "course-34261"
 
 if __name__ == "__main__":
     inputs = {
-        "course_id": 34311,
+        "course_id": 34261,
         "store_dir": path,
         "target_website": "umass.moonami.com",
     }  # , "login_cookie": cookies}
     # extractor(**inputs)
 
     content = constructor(**inputs)
-    content.extraction(0)
-    content.construct_sections(0)
+    content.extraction()
+    content.construct_sections()

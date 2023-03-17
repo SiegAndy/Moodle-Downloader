@@ -160,7 +160,6 @@ class constructor:
         section_index = format(info_param["section_index"], "02d")
         partial_dir_name = f"{section_index}-{section.title}"
         dir_name = os.path.join(self.store_dir, partial_dir_name)
-        index = 0
         try:
             if not os.path.isdir(dir_name):
                 os.makedirs(dir_name)
@@ -181,35 +180,35 @@ class constructor:
                 dir_name=dir_name,
                 info_param=info_param,
             )
-            # if item.type == mod_type.resource.name:
-            #     curr_downloader = construct_file(
-            #         target=item, info_param=info_param, callback=partial_callback
-            #     )
-            # elif item.type == mod_type.folder.name:
-            #     curr_downloader = construct_folder(
-            #         target=item,
-            #         mode=self.config["zip_mode"],
-            #         info_param=info_param,
-            #         callback=partial_callback,
-            #     )
-            # elif item.type == mod_type.page.name:
-            #     curr_downloader = construct_page(
-            #         target=item,
-            #         mode=self.config["page_mode"],
-            #         info_param=info_param,
-            #         callback=partial_callback,
-            #     )
-            if item.type == mod_type.lti.name:
-                curr_downloader = construct_echo360(
+            if item.type == mod_type.resource.name:
+                curr_downloader = construct_file(
+                    target=item, info_param=info_param, callback=partial_callback
+                )
+            elif item.type == mod_type.folder.name:
+                curr_downloader = construct_folder(
                     target=item,
+                    mode=self.config["zip_mode"],
                     info_param=info_param,
                     callback=partial_callback,
                 )
-                index += 1
+            elif item.type == mod_type.page.name:
+                curr_downloader = construct_page(
+                    target=item,
+                    mode=self.config["page_mode"],
+                    info_param=info_param,
+                    callback=partial_callback,
+                )
+            elif item.type == mod_type.lti.name:
+                curr_downloader = construct_echo360(
+                    target=item,
+                    mode=self.config["video_mode"],
+                    info_param=info_param,
+                    callback=partial_callback,
+                )
             else:
                 continue
-            if index == 2:
-                break
+            # if index == 2:
+            #     break
 
     def construct_sections(self, index: int = -1) -> None:
         print("#" * int(terminal_cols * 3 / 4))
@@ -224,10 +223,13 @@ class constructor:
             "cookie": self.cookie,
         }
 
-        for section_index, (section_id, section) in enumerate(
+        for iter_index, (section_id, section) in enumerate(
             self.container.contents.items()
         ):
-            if index != section_index:
+            section_index = int(section_id.split("-")[-1])
+            if index != -1 and index != section_index:
+                continue
+            if section.items_length == 0:
                 continue
             info_param["section_index"] = section_index
             info_param["section_title"] = section.title
