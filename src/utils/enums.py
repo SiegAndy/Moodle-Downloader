@@ -16,6 +16,15 @@ class custom_enum(Enum):
                 result.append(key)
         return result
 
+    def __eq__(self, other):
+        return self.name.lower() == str(other).lower()
+
+    def __str__(self) -> str:
+        return self.name
+
+    def to_json(self) -> str:
+        return self.name
+
 
 class request_method(custom_enum):
     GET = "GET"
@@ -59,6 +68,13 @@ class mod_type(custom_enum):
     lti = "lti"
     forum = "forum"
     undefined = "undefined"
+
+
+class container_mode(custom_enum):
+    create = "create"
+    read = "read"
+    update = "update"
+    overwrite = "overwrite"
 
 
 # print(file_mode.get_class_name())

@@ -6,7 +6,7 @@ import shutil
 import traceback
 import unicodedata
 import zipfile
-from typing import Any, Dict, Tuple, Type
+from typing import Any, Dict, List, Tuple, Type
 
 from bs4 import BeautifulSoup
 from xhtml2pdf import pisa
@@ -231,7 +231,7 @@ def parse_file_format(value: str) -> str:
     return result
 
 
-def load_config() -> Dict[str, Any]:
+def load_config() -> Dict[str, str | int | List]:
     with open(config_path, "r", encoding="utf-8") as config:
         config = config.readlines()
 

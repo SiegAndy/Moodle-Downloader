@@ -240,7 +240,6 @@ class downloader:
         """
         if download_path != None:
             self.store_path = download_path
-
         self.start_loading_thread()
         self.retry_num = 0
         self.progress = 0

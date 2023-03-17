@@ -1,60 +1,44 @@
-import json
-from collections import defaultdict
 from http.cookies import CookieError
 from typing import Any, Dict, List, Tuple
 
 import requests
 from bs4 import BeautifulSoup, Tag
 
-from src.cookie_reader import retreive_cookies
+from src.container import course_info, item_info, section_info
+from src.module.folder import fetch_folder_params
+from src.module.lti import fetch_lti_params
 from src.utils import (
-    checksum,
     cleanup_prev_line,
-    view_url,
     launch_url,
     mod_type,
     moodle_course_url,
     terminal_cols,
+    view_url,
 )
 
 
 class extractor:
-    class_id: str
-    store_path: str
-    login_cookie: Dict[str, str]
-    info_dict: Dict[str, Dict]
     extract_section_index: int
+    container: course_info
 
     def __init__(
         self,
-        class_id: str,
-        store_path: str,
-        target_website: str = None,
-        login_cookie: Dict[str, str] = None,
+        container: course_info,
         extract_section_index: int = -1,
     ) -> None:
-        self.class_id = class_id
-        self.store_path = store_path
+        self.container = container
         self.extract_section_index = extract_section_index
 
-        if login_cookie is None:
-            if target_website is None:
-                raise ValueError(
-                    "Error! Missing target website url, need to specify one of [target_website, login_cookie]!"
-                )
-            self.login_cookie = retreive_cookies(target_website=target_website)
-            print(json.dumps(self.login_cookie, indent=4))
-        else:
-            self.login_cookie = login_cookie
-
-        self.info_dict = defaultdict(dict)
-
-    def check_signin(self, url: str, cookies: Dict) -> Tuple[BeautifulSoup, str]:
+    def check_signin(
+        self, url: str, cookies: Dict, check_title: bool = True
+    ) -> Tuple[BeautifulSoup, str]:
         res = requests.get(url, cookies=cookies)
         res_cont = res.content.decode(encoding="utf-8")
-        # with open (path, 'r', encoding='utf-8') as f:
-        #     res_cont = f.read()
         soup = BeautifulSoup(res_cont, "html.parser")
+        with open("./test/test.html", "w", encoding="utf-8") as f:
+            f.write(soup.prettify())
+        if not check_title:
+            return soup, ""
 
         res_title = soup.find("title").text
         if "Sign in" in res_title:
@@ -63,9 +47,10 @@ class extractor:
             )
         return soup, res_title
 
-    def extract_sections(self) -> Dict[str, Dict]:
+    def extract_sections(self) -> None:
         soup, page_title = self.check_signin(
-            url=moodle_course_url.format(self.class_id), cookies=self.login_cookie
+            url=moodle_course_url.format(self.container.course_id),
+            cookies=self.container.course_cookie,
         )
 
         print("#" * int(terminal_cols * 3 / 4))
@@ -73,14 +58,13 @@ class extractor:
 
         # with open ("files/unlogin.html", 'w', encoding='utf-8') as f:
         #     f.write(soup.prettify())
-        self.info_dict.clear()
-        self.info_dict["course-title"] = page_title
+        # update course title in container
+        if self.container.course_title != page_title:
+            self.container.course_title = page_title
         sections: List[Tag] = soup.find_all("li", class_="section main clearfix")
         for index, section in enumerate(sections):
             section_title = section["aria-label"]
-            self.info_dict[section["id"]]["title"] = section_title
-            self.info_dict[section["id"]]["checksum"] = checksum(section)
-            self.info_dict[section["id"]]["items"] = dict()
+            curr_section = section_info(title=section_title, raw_content=section)
 
             if self.extract_section_index != -1 and self.extract_section_index != index:
                 continue
@@ -90,11 +74,10 @@ class extractor:
 
             section_page_elements = section.find(id=f"collapse-{index}")
 
-            self.extract_section_info(
-                section_page_elements, self.info_dict[section["id"]]["items"]
-            )
+            self.extract_section_info(section_page_elements, curr_section)
 
-            if len(self.info_dict[section["id"]]["items"].items()) > 0:
+            self.container.contents[f"section-{index}"] = curr_section
+            if curr_section.items_length > 0:
                 msg = f"Retrieved Section {index}: '{section_title}'"
             else:
                 msg = f"Fail to Retrieved Section {index}: '{section_title}'.\nDetail: Section not containing files."
@@ -106,57 +89,29 @@ class extractor:
         print("Retrieval Complete! Now Downloading Files...")
         print("#" * int(terminal_cols * 3 / 4))
 
-        with open(self.store_path, "w", encoding="utf-8") as record:
-            record.write(json.dumps(self.info_dict, indent=4))
+        # with open(os.path.join(self.store_dir, 'course_info.json'), "w", encoding="utf-8") as record:
+        #     record.write(json.dumps(self.info_dict, indent=4))
 
-        return self.info_dict
-
-    def extract_folder_info(self, item_info: Dict) -> None:
+    def extract_folder_info(self, curr_item: item_info) -> None:
         soup, page_title = self.check_signin(
-            url=view_url.format(mod_type.folder.name, item_info["id"]),
-            cookies=self.login_cookie,
+            url=view_url.format(mod_type.folder.name, curr_item.id),
+            cookies=self.container.course_cookie,
         )
-        forms: List[Tag] = soup.find_all("form", attrs={"method": "post"})
-        file_section = soup.find("section", attrs={"id": "region-main"})
-        for form in forms:
-            if "download_folder" not in form.attrs["action"]:
-                continue
-            inputs = form.find_all("input")
-            if "detail" not in item_info:
-                item_info["detail"] = dict()
-                item_info["detail"]["checksum"] = checksum(file_section)
-            if "post_params" not in item_info["detail"]:
-                item_info["detail"]["post_params"] = dict()
-            for input in inputs:
-                item_info["detail"]["post_params"][input["name"]] = input["value"]
+        fetch_folder_params(curr_item=curr_item, soup=soup)
 
-    def extract_lti_info(self, item_info: Dict) -> None:
+    def extract_lti_info(self, curr_item: item_info) -> None:
         # reach lti redirect form page
         soup, page_title = self.check_signin(
-            url=launch_url.format(mod_type.lti.name, item_info["id"]),
-            cookies=self.login_cookie,
+            url=launch_url.format(mod_type.lti.name, curr_item.id),
+            cookies=self.container.course_cookie,
+            check_title=False,
         )
-        # retreive the form
-        form: Tag = soup.find(
-            "form",
-            attrs={"name": "ltiLaunchForm", "id": "ltiLaunchForm", "method": "post"},
+        fetch_lti_params(
+            curr_item=curr_item, soup=soup, store_dir=self.container.store_dir
         )
-        # retreive the target url from form
-        lti_url = form["action"]
-        # retreive the post params from form
-        inputs = form.find_all("input")
-        detail = dict()
-        for input in inputs:
-            detail[input["name"]] = input["value"]
-        if "detail" not in item_info:
-            item_info["detail"] = dict()
-            item_info["detail"]["checksum"] = checksum(form)
-        if "post_params" not in item_info["detail"]:
-            item_info["detail"]["post_params"] = dict()
-        item_info["detail"]["post_params"] = detail
 
     def extract_section_info(
-        self, section_page_elements: Tag, section_info: Dict
+        self, section_page_elements: Tag, curr_section: section_info
     ) -> Dict[str, Dict]:
         content: List[Tag] = section_page_elements.find_all("li")
         if len(content) == 0:
@@ -165,23 +120,20 @@ class extractor:
         for elem in content:
             # id='module-1916049'
             elem_id = elem["id"].split("-")[1]
-            section_info[elem_id] = dict()
-
-            item_info = section_info[elem_id]
-            item_info["id"] = elem_id
-
-            item_checksum = checksum(elem)
-            item_info["checksum"] = item_checksum
-
             # ['activity', 'url', 'modtype_url']
-            item_info["type"] = elem["class"][1]
-
-            item_info["title"] = (
-                elem.find("span", class_="instancename").contents[0].text
+            curr_type = elem["class"][1]
+            curr_item = item_info(
+                id=elem_id,
+                title=elem.find("span", class_="instancename").contents[0].text,
+                type=curr_type,
+                link=view_url.format(curr_type, elem_id),
+                raw_content=elem,
             )
-            item_info["link"] = view_url.format(item_info["type"], elem_id)
-            if item_info["type"] == mod_type.folder.name:
-                self.extract_folder_info(item_info=item_info)
+            if curr_item.type == mod_type.folder.name:
+                self.extract_folder_info(curr_item=curr_item)
+            elif curr_item.type == mod_type.lti.name:
+                self.extract_lti_info(curr_item=curr_item)
+
             # check if there is a text to describe the link/content
             activity_instance = elem.find("div", class_="activityinstance")
             siblings = [
@@ -189,14 +141,17 @@ class extractor:
                 for sibling in list(activity_instance.next_siblings)
                 if sibling != "\n"
             ]
-            if len(siblings) == 0:
-                continue
-            item_info["content"] = list()
+            curr_item.content = list()
+            curr_section.items[elem_id] = curr_item
             for sibling in siblings:
-                item_info["content"].append(sibling.get_text().replace("\xa0", ""))
+                curr_item.content.append(sibling.get_text().replace("\xa0", ""))
 
-        return section_info
+        return curr_section
 
-    def __call__(self, *args: Any, **kwds: Any) -> Dict[str, Dict]:
+    def __call__(
+        self, container: course_info = None, *args: Any, **kwds: Any
+    ) -> course_info:
+        if container is not None:
+            self.container = self.container
         self.extract_sections()
-        return self.info_dict
+        return self.container

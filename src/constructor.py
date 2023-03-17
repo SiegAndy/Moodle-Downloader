@@ -1,51 +1,51 @@
 import logging
 import logging.config
 import os
-from typing import Dict
+from typing import Dict, List
 
+from src.container import course_info, section_info
 from src.downloader import downloader
 from src.extractor import extractor
-from src.utils.enums import (
-    custom_enum,
-    download_mode,
-    file_mode,
-    mod_type,
-    page_mode,
-    request_method,
-    zip_mode,
-)
-from src.utils.func import load_config, slugify, unzip_file, html_to_pdf
-from src.utils.params import download_folder_url, terminal_cols
+from src.module.folder import construct_folder
+from src.module.lti import construct_echo360
+from src.module.page import construct_page
+from src.module.resource import construct_file
+from src.utils.enums import custom_enum, download_mode, file_mode, mod_type
+from src.utils.func import slugify
+from src.utils.params import terminal_cols
 
-info_dict_path = "info.json"
+info_dict_path = "course_info.json"
+
+# Implementation from:
+# https://docs.python.org/3/library/functools.html#functools.partial
+def partial(func, /, *args, **keywords):
+    def newfunc(*fargs, **fkeywords):
+        newkeywords = {**keywords, **fkeywords}
+        return func(*args, *fargs, **newkeywords)
+
+    newfunc.func = func
+    newfunc.args = args
+    newfunc.keywords = keywords
+    return newfunc
 
 
 class constructor:
-    class_id: str
-    store_dir: str
-    target_website: str
-    cookie: Dict[str, str]
-    info_dict: Dict[str, Dict]
-    config: Dict[str, custom_enum | str]
+    container: course_info
 
     def __init__(
         self,
-        class_id: str,
+        course_id: str,
         store_dir: str,
         target_website: str,
         config: str = "./log_config.ini",
     ) -> None:
-        self.class_id = class_id
-        self.store_dir = store_dir
-        self.fixed_resource_store_dir = os.path.join(store_dir, "Resources")
-        self.target_website = target_website
-        self.config = load_config()
-        self.info_dict = None
-        self.cookie = None
+        self.container = course_info(
+            course_id=course_id, store_dir=store_dir, target_website=target_website
+        )
 
         try:
-            if not os.path.isdir(self.store_dir):
-                os.makedirs(self.store_dir)
+            if not os.path.isdir(store_dir):
+                os.makedirs(store_dir)
             if self.config["file_mode"] != file_mode.UnderSection:
                 if not os.path.isdir(self.fixed_resource_store_dir):
                     os.makedirs(self.fixed_resource_store_dir)
@@ -60,18 +60,35 @@ class constructor:
                 "Error! Unable to create root directory! Please make sure you have privilege role!"
             )
 
+    @property
+    def config(self) -> Dict[str, str | List | custom_enum]:
+        return self.container.config
+
+    @property
+    def cookie(self) -> Dict[str, str]:
+        return self.container.course_cookie
+
+    @property
+    def store_dir(self) -> str:
+        return self.container.store_dir
+
+    @property
+    def fixed_resource_store_dir(self) -> str:
+        return self.container.fixed_resource_store_dir
+
+    def __enter__(self) -> "constructor":
+        return self
+
+    def __exit__(self) -> None:
+        self.container.save()
+
     def extraction(self, index: int = -1) -> Dict[str, Dict]:
-        if self.info_dict is not None:
-            self.info_dict.clear()
-        dict_store_path = os.path.join(self.store_dir, info_dict_path)
         new_extractor = extractor(
-            class_id=self.class_id,
-            store_path=dict_store_path,
-            target_website=self.target_website,
+            container=self.container,
             extract_section_index=index,
         )
-        self.info_dict = new_extractor()
-        self.cookie = new_extractor.login_cookie
+        new_extractor()
+        self.container.save()
 
     def format_filename(self, info_param: Dict[str, int | str]) -> str:
         try:
@@ -86,42 +103,64 @@ class constructor:
         except Exception as e:
             logging.warning(f"Error! Unable to Format Filename. Detail: {e}")
 
-    def construct_file(self, target: Dict, info_param: Dict) -> downloader:
-        the_downloader = downloader(url=target["link"], cookies=self.cookie)
-        info_param["url_filename"] = the_downloader.file_name
-        info_param["url_file_extension"] = the_downloader.file_name.split(".")[-1]
-        return the_downloader
+    def downloader_callback(
+        self,
+        dir_name: str,
+        info_param: Dict[str, int | str],
+        curr_downloader: downloader,
+        intermediate_folder: str = None,
+        url_filename: str = None,
+    ) -> List[str]:
 
-    def construct_folder(self, target: Dict, info_param: Dict) -> downloader:
-        info_param["url_filename"] = target["title"]
-        the_downloader = downloader(
-            url=download_folder_url,
-            cookies=self.cookie,
-            method=request_method.POST,
-            params={"data": target["detail"]["post_params"]},
-            suppress_url_file_check=True,
-            url_filename=info_param["url_filename"],
-        )
-        info_param["url_file_extension"] = "zip"
-        return the_downloader
+        if self.config["download_mode"] != download_mode.All:
+            info_param["file_index"] += 1
+            info_param["section_file_index"] += 1
 
-    def construct_page(self, target: Dict, info_param: Dict) -> downloader:
-        info_param["url_filename"] = target["title"]
-        the_downloader = downloader(
-            url=target["link"],
-            cookies=self.cookie,
-            suppress_url_file_check=True,
-            url_filename=info_param["url_filename"],
-        )
-        info_param["url_file_extension"] = "html"
-        return the_downloader
+        file_name = self.format_filename(info_param=info_param)
+        if url_filename is not None:
+            file_name = slugify(url_filename) + f".{info_param['url_file_extension']}"
+        if intermediate_folder is not None:
+            file_name = os.path.join(intermediate_folder, file_name)
+            os.makedirs(
+                os.path.join(
+                    dir_name,
+                    intermediate_folder,
+                ),
+                exist_ok=True,
+            )
+            os.makedirs(
+                os.path.join(
+                    self.fixed_resource_store_dir,
+                    intermediate_folder,
+                ),
+                exist_ok=True,
+            )
+
+        file_paths = []
+        if (
+            self.config["file_mode"] == file_mode.Both
+            or self.config["file_mode"] == file_mode.UnderSection
+        ):
+            file_paths = [os.path.join(dir_name, file_name)]
+            curr_downloader.download(download_path=file_paths[0])
+            if self.config["file_mode"] == file_mode.Both:
+                file_paths.append(
+                    os.path.join(self.fixed_resource_store_dir, file_name)
+                )
+                curr_downloader.duplicate(new_file_path=file_paths[1])
+        elif self.config["file_mode"] == file_mode.InOneFolder:
+            file_paths = [os.path.join(self.fixed_resource_store_dir, file_name)]
+            curr_downloader.download(download_path=file_paths[0])
+
+        return file_paths
 
     def construct_section(
-        self, info_param: Dict[str, int | str], section: Dict[str, Dict]
+        self, info_param: Dict[str, int | str], section: section_info
     ) -> None:
         section_index = format(info_param["section_index"], "02d")
-        partial_dir_name = f"{section_index}-{section['title']}"
+        partial_dir_name = f"{section_index}-{section.title}"
         dir_name = os.path.join(self.store_dir, partial_dir_name)
+        index = 0
         try:
             if not os.path.isdir(dir_name):
                 os.makedirs(dir_name)
@@ -132,58 +171,49 @@ class constructor:
                 f"Error! Unable to create subdirectory for section {partial_dir_name}!"
             )
 
-        for item_id, item in section["items"].items():
+        for item_id, item in section.items.items():
             if self.config["download_mode"] == download_mode.All:
                 info_param["file_index"] += 1
                 info_param["section_file_index"] += 1
 
-            if item["type"] == mod_type.resource.name:
-                curr_downloader = self.construct_file(
-                    target=item, info_param=info_param
+            partial_callback = partial(
+                self.downloader_callback,
+                dir_name=dir_name,
+                info_param=info_param,
+            )
+            # if item.type == mod_type.resource.name:
+            #     curr_downloader = construct_file(
+            #         target=item, info_param=info_param, callback=partial_callback
+            #     )
+            # elif item.type == mod_type.folder.name:
+            #     curr_downloader = construct_folder(
+            #         target=item,
+            #         mode=self.config["zip_mode"],
+            #         info_param=info_param,
+            #         callback=partial_callback,
+            #     )
+            # elif item.type == mod_type.page.name:
+            #     curr_downloader = construct_page(
+            #         target=item,
+            #         mode=self.config["page_mode"],
+            #         info_param=info_param,
+            #         callback=partial_callback,
+            #     )
+            if item.type == mod_type.lti.name:
+                curr_downloader = construct_echo360(
+                    target=item,
+                    info_param=info_param,
+                    callback=partial_callback,
                 )
-            elif item["type"] == mod_type.folder.name:
-                curr_downloader = self.construct_folder(
-                    target=item, info_param=info_param
-                )
-            elif item["type"] == mod_type.page.name:
-                curr_downloader = self.construct_page(
-                    target=item, info_param=info_param
-                )
+                index += 1
             else:
                 continue
-
-            if self.config["download_mode"] != download_mode.All:
-                info_param["file_index"] += 1
-                info_param["section_file_index"] += 1
-            file_name = self.format_filename(info_param=info_param)
-            if (
-                self.config["file_mode"] == file_mode.Both
-                or self.config["file_mode"] == file_mode.UnderSection
-            ):
-                file_paths = [os.path.join(dir_name, file_name)]
-                curr_downloader.download(download_path=file_paths[0])
-                if self.config["file_mode"] == file_mode.Both:
-                    file_paths.append(
-                        os.path.join(self.fixed_resource_store_dir, file_name)
-                    )
-                    curr_downloader.duplicate(new_file_path=file_paths[1])
-            elif self.config["file_mode"] == file_mode.InOneFolder:
-                file_paths = [os.path.join(self.fixed_resource_store_dir, file_name)]
-                curr_downloader.download(download_path=file_paths[0])
-
-            if (
-                info_param["url_file_extension"] == "zip"
-                and self.config["zip_mode"] == zip_mode.UNZIP
-            ):
-                for file_path in file_paths:
-                    unzip_file(target_zip=file_path, unzip_directory=file_path[:-4])
-            elif item["type"] == "page" and self.config["page_mode"] == page_mode.PDF:
-                for file_path in file_paths:
-                    html_to_pdf(html_path=file_path)
+            if index == 2:
+                break
 
     def construct_sections(self, index: int = -1) -> None:
         print("#" * int(terminal_cols * 3 / 4))
-        print(f"Downloading Course: '{self.info_dict['course-title']}'")
+        print(f"Downloading Course: '{self.container.course_title}'")
         info_param = {
             "file_index": -1,
             "section_index": -1,
@@ -191,20 +221,21 @@ class constructor:
             "section_file_index": -1,
             "url_filename": "",
             "url_file_extension": "",
+            "cookie": self.cookie,
         }
 
         for section_index, (section_id, section) in enumerate(
-            self.info_dict.items(), start=-1
+            self.container.contents.items()
         ):
-            if section_index == -1 or (index != -1 and index != section_index):
+            if index != section_index:
                 continue
             info_param["section_index"] = section_index
-            info_param["section_title"] = section["title"]
+            info_param["section_title"] = section.title
             info_param["section_file_index"] = -1
             print("#" * int(terminal_cols / 2))
-            print(f"Section {section_index} '{section['title']}': Downloading")
+            print(f"Section {section_index} '{section.title}': Downloading")
             self.construct_section(info_param=info_param, section=section)
-            print(f"Section {section_index} '{section['title']}': Downloaded")
+            print(f"Section {section_index} '{section.title}': Downloaded")
 
         print("#" * int(terminal_cols / 2))
         print(f"Download Complete! Downloaded File are stored in '{self.store_dir}'.")

@@ -18,7 +18,7 @@ path = "test"
 
 if __name__ == "__main__":
     inputs = {
-        "class_id": 34311,
+        "course_id": 34311,
         "store_dir": path,
         "target_website": "umass.moonami.com",
     }  # , "login_cookie": cookies}
