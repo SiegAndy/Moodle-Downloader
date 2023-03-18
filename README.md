@@ -1,7 +1,7 @@
-# moodle-downloader
-The moonle-downloader is used for downloading and syncing the file from the moodle page. It now only support [page, file, folder, echo360-video] resources and is expected to implement more categories downloads in the future along with the parallel downloading queue.
+# Moodle-Downloader
+The Moodle-Downloader is used for downloading and syncing the file from the moodle page. It now only support [page, file, folder, echo360-video] resources and is expected to implement more categories downloads in the future along with the parallel downloading queue.
 
-## Supporting Operating System
+## Supported Operating System
     Windows
     MacOS
     Linux
@@ -17,7 +17,7 @@ The moonle-downloader is used for downloading and syncing the file from the mood
     DOWNLOAD_MODE: 
         Options are: [ALL, FILEONLY]
         Default:
-            "DOWNLOAD_MODE=FileOnly"
+            "DOWNLOAD_MODE=FILEONLY"
     FILE_MODE: 
         Options are: [UNDERSECTION, INONEFOLDER, BOTH]
         Default:
@@ -44,5 +44,5 @@ The moonle-downloader is used for downloading and syncing the file from the mood
             "url_file_extension",
         ]
         Default:
-            "FILENAME_FORMAT=%section_index%-%section_file_index%-%section_title%.%url_file_extension%"
+            "FILENAME_FORMAT=%section_index%-%section_file_index%-%url_filename%.%url_file_extension%"
 
