@@ -1,4 +1,4 @@
-from src import constructor, extractor
+from src import constructor
 
 mod_type = {
     "assign": "assignment",
@@ -18,7 +18,7 @@ path = "course-34261"
 
 if __name__ == "__main__":
     inputs = {
-        "course_id": 34261,
+        "course_id": 34311,
         "store_dir": path,
         "target_website": "umass.moonami.com",
     }  # , "login_cookie": cookies}

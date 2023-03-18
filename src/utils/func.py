@@ -60,7 +60,10 @@ def _unzip_nested_zip(zip_ref: zipfile.ZipFile, unzip_directory: str) -> None:
                     and target_file_dir != ""
                     and not os.path.isdir(target_file_dir)
                 ):
-                    os.makedirs(target_file_dir)
+                    os.makedirs(target_file_dir, exist_ok=True)
+                if os.path.splitext(filename)[-1] == "":
+                    os.makedirs(target_file_name, exist_ok=True)
+                    continue
                 if target_file_dir == target_file_name:
                     continue
             target = open(target_file_name, "wb")
@@ -207,7 +210,7 @@ def check_config(key: str, default: Any = None, output_type: Any = None) -> bool
 
 def enum_conversion(value: str, type: custom_enum) -> Type[custom_enum]:
     try:
-        return type(value)
+        return type(value.upper())
     except Exception:
         raise ValueError(
             f"Error! '{value}' is not valid option for class '{type.get_class_name()}'. Valid Options are {str(type.get_options())}."
@@ -267,7 +270,7 @@ def load_config() -> Dict[str, str | int | List]:
     if "download_mode" not in result:
         result["download_mode"] = download_mode.FileOnly
     if "download_mode" not in result:
-        result["file_mode"] = file_mode.InOneFolder
+        result["file_mode"] = file_mode.INONEFOLDER
     if "zip_mode" not in result:
         result["zip_mode"] = zip_mode.ZIP
     if "page_mode" not in result:

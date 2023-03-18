@@ -53,14 +53,14 @@ class zip_mode(custom_enum):
 
 
 class download_mode(custom_enum):
-    All = "all"
-    FileOnly = "FileOnly"
+    All = "ALL"
+    FileOnly = "FILEONLY"
 
 
 class file_mode(custom_enum):
-    UnderSection = "UnderSection"
-    InOneFolder = "InOneFolder"
-    Both = "Both"
+    UNDERSECTION = "UNDERSECTION"
+    INONEFOLDER = "INONEFOLDER"
+    BOTH = "BOTH"
 
 
 class mod_type(custom_enum):

@@ -155,7 +155,7 @@ class course_info(info):
                     "Error! Missing target website url, need to specify one of [target_website, login_cookie]!"
                 )
             self.course_cookie = retreive_cookies(target_website=self.target_website)
-            print(json.dumps(self.course_cookie, indent=4))
+            # print(json.dumps(self.course_cookie, indent=4))
 
     def init_params(self) -> None:
         if self.contents is not None:

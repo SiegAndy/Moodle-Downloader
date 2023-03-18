@@ -229,7 +229,7 @@ class Echo360Extractor:
             message=f"[Ongoing] Setting up webdriver for rendering dynamic pages"
         )
         if self.driver is not None:
-            print("WebDriver has already set!")
+            self.display_message(message=f"[Error] WebDriver has already set!")
             return False
 
         # not show the test instance of browser

@@ -46,7 +46,7 @@ class constructor:
         try:
             if not os.path.isdir(store_dir):
                 os.makedirs(store_dir)
-            if self.config["file_mode"] != file_mode.UnderSection:
+            if self.config["file_mode"] != file_mode.UNDERSECTION:
                 if not os.path.isdir(self.fixed_resource_store_dir):
                     os.makedirs(self.fixed_resource_store_dir)
             if not os.path.isdir("./src/data/"):
@@ -138,17 +138,17 @@ class constructor:
 
         file_paths = []
         if (
-            self.config["file_mode"] == file_mode.Both
-            or self.config["file_mode"] == file_mode.UnderSection
+            self.config["file_mode"] == file_mode.BOTH
+            or self.config["file_mode"] == file_mode.UNDERSECTION
         ):
             file_paths = [os.path.join(dir_name, file_name)]
             curr_downloader.download(download_path=file_paths[0])
-            if self.config["file_mode"] == file_mode.Both:
+            if self.config["file_mode"] == file_mode.BOTH:
                 file_paths.append(
                     os.path.join(self.fixed_resource_store_dir, file_name)
                 )
                 curr_downloader.duplicate(new_file_path=file_paths[1])
-        elif self.config["file_mode"] == file_mode.InOneFolder:
+        elif self.config["file_mode"] == file_mode.INONEFOLDER:
             file_paths = [os.path.join(self.fixed_resource_store_dir, file_name)]
             curr_downloader.download(download_path=file_paths[0])
 
