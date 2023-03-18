@@ -1,5 +1,3 @@
-# Partial Modified Code from Package file-downloader "https://pypi.org/project/file-downloader/"
-
 import json
 import logging
 import os
@@ -39,6 +37,10 @@ class loading(Thread):
 
 
 class downloader:
+    """
+    Adapt part of code from Package file-downloader "https://pypi.org/project/file-downloader/"
+    """
+
     url: str  # path to download target file
     cookies: Dict[str, str]
     store_path: str  # path to store the downloaded target file
@@ -50,6 +52,7 @@ class downloader:
     progress: float  # progress of the download
     content_length: int  # target file total length
     fetched_length: int  # downloaded target file length
+    threshold: int  # if less than threshold, the cookie might be not valid
     downloaded: bool  # whether the file is already downloaded
 
     params: Dict
@@ -64,11 +67,13 @@ class downloader:
         store_path: str = "",
         socket_timeout: float = 120.0,
         retry_limit: int = 5,
+        threshold: int = None,
         suppress_url_file_check: bool = False,
         url_filename: str = "",
     ):
         self.url = url
         self.cookies = cookies
+        self.threshold = threshold
         self.method = method.get_req_method()
         # self.cookies = dict_to_str(cookies)
         self.store_path = store_path
@@ -245,6 +250,11 @@ class downloader:
         if local_size >= self.content_length and self.content_length != -1:
             print(f"[Status] File Exist, no need to download. {self.store_path}")
             return True
+        if self.threshold is not None and self.content_length < self.threshold:
+            print(
+                f"[Status] File too small, cookie might not be valid, remove existing json to continue "
+            )
+            return False
         self.start_loading_thread()
         self.retry_num = 0
         self.progress = 0

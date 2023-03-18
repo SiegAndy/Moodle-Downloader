@@ -13,7 +13,6 @@ from src.utils import (
     cleanup_prev_line,
     launch_url,
     mod_type,
-    modified_expire_time,
     moodle_course_url,
     terminal_cols,
     view_url,
@@ -47,7 +46,8 @@ class extractor:
         res_title = soup.find("title").text
         if "Sign in" in res_title:
             raise CookieError(
-                "Invalid Cookie! Please login to the Moodle First, and then try to retreive all the contents!"
+                "Invalid Cookie! Please login to the Moodle First, and then try to retreive all the contents!\n"
+                + "Note: it takes time for Chrome to write cookie into local file, please wait few seconds before next run."
             )
         elif "Error" in res_title:
             raise Exception(
@@ -82,7 +82,7 @@ class extractor:
             if isinstance(curr_section, section_info):
                 if (
                     curr_section.checksum != checksum(section)
-                    or time() - curr_section.last_modified > modified_expire_time
+                    or time() >= curr_section.expirey
                 ):
                     curr_section = section_info(
                         title=section_title, raw_content=section
@@ -106,6 +106,7 @@ class extractor:
             self.extract_section_info(section_page_elements, curr_section)
             self.container.contents[f"section-{index}"] = curr_section
             if curr_section.items_length > 0:
+                curr_section.update_expirey()
                 msg = f"Retrieved Section {index}: '{section_title}'"
             else:
                 msg = f"Fail to Retrieved Section {index}: '{section_title}'.\nDetail: Section not containing files."
@@ -158,10 +159,7 @@ class extractor:
             if elem_id in curr_section.items:
                 curr_item = curr_section.items[elem_id]
             if isinstance(curr_item, item_info):
-                if (
-                    curr_item.checksum != checksum(elem)
-                    or time() - curr_item.last_modified > modified_expire_time
-                ):
+                if curr_item.checksum != checksum(elem) or time() > curr_item.expirey:
                     curr_item = item_info(
                         id=elem_id,
                         title=elem.find("span", class_="instancename").contents[0].text,

@@ -14,11 +14,13 @@ from src.utils.enums import custom_enum, download_mode, file_mode, mod_type
 from src.utils.func import slugify
 from src.utils.params import terminal_cols
 
-info_dict_path = "course_info.json"
 
-# Implementation from:
-# https://docs.python.org/3/library/functools.html#functools.partial
 def partial(func, /, *args, **keywords):
+    """
+    Implementation from:
+    https://docs.python.org/3/library/functools.html#functools.partial
+    """
+
     def newfunc(*fargs, **fkeywords):
         newkeywords = {**keywords, **fkeywords}
         return func(*args, *fargs, **newkeywords)

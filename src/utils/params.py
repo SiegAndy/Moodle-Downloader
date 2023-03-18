@@ -19,3 +19,6 @@ launch_url = "https://umass.moonami.com/mod/{}/launch.php?id={}"
 
 # extract info is valid for one day
 modified_expire_time = 60 * 60 * 24
+
+# video cookie only valid for ten mins
+video_expire_time = 60 * 10

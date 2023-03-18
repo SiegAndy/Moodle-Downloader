@@ -6,7 +6,6 @@ import sys
 from typing import ByteString, Dict, List, Tuple
 from urllib.parse import urlparse
 
-import keyring
 from Crypto.Cipher import AES
 from Crypto.Protocol.KDF import PBKDF2
 
@@ -32,6 +31,8 @@ def retreive_windows_cookies_key() -> Tuple[ByteString, List[str]]:
 
 
 def retreive_mac_linux_cookies_key() -> Tuple[ByteString, List[str]]:
+    import keyring
+
     salt = b"saltysalt"
     length = 16
     # If running Chrome on OSX

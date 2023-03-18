@@ -1,13 +1,13 @@
 import json
 import os
-from collections import defaultdict
 from time import time
 from typing import Dict, List, Type
 
 from src.cookie_reader import retreive_cookies
-from src.utils.enums import container_mode, custom_enum
+from src.utils.enums import container_mode, custom_enum, video_mode
 from src.utils.func import checksum as checksum_func
 from src.utils.func import load_config
+from src.utils.params import modified_expire_time, video_expire_time
 
 info_dict_path = "course_info.json"
 fix_resource_store_dir = "Resources"
@@ -35,7 +35,7 @@ class info:
 
 
 class item_info(info):
-    last_modified: int
+    expirey: int
     checksum: str
     id: str
     title: str
@@ -48,13 +48,13 @@ class item_info(info):
         self,
         id: str = None,
         title: str = None,
-        type: str = None,
+        type: str | Type[custom_enum] = None,
         link: str = None,
         content: List = None,
         detail: Dict = None,
         checksum: str = None,
         raw_content: str = None,
-        last_modified: int = None,
+        expirey: int = None,
     ) -> None:
         self.id = id
         self.title = title
@@ -69,9 +69,11 @@ class item_info(info):
         self.checksum = checksum
         if raw_content is not None:
             self.checksum = checksum_func(raw_content)
-        self.last_modified = last_modified
-        if last_modified is None:
-            self.last_modified = time()
+        self.expirey = expirey
+        if expirey is None:
+            self.expirey = time() + modified_expire_time
+            if self.type.lower() == "lti":
+                self.expirey = time() + video_expire_time
 
     @classmethod
     def from_json(cls, input_json: Dict) -> "item_info":
@@ -82,7 +84,7 @@ class item_info(info):
 
 
 class section_info(info):
-    last_modified: int
+    expirey: int
     title: str
     checksum: str
     items: Dict[str, item_info]
@@ -92,16 +94,23 @@ class section_info(info):
         title: str = None,
         checksum: str = None,
         raw_content: str = None,
-        last_modified: int = None,
+        expirey: int = None,
     ) -> None:
         self.title = title
         self.checksum = checksum
         if raw_content is not None:
             self.checksum = checksum_func(raw_content)
         self.items = dict()
-        self.last_modified = last_modified
-        if last_modified is None:
-            self.last_modified = time()
+        self.expirey = expirey
+        if expirey is None:
+            self.expirey = time() + modified_expire_time
+
+    def update_expirey(self, expire_time: int = None) -> None:
+        if expire_time is None:
+            for key, value in self.items.items():
+                self.expirey = min(self.expirey, value.expirey)
+        else:
+            self.expirey += expire_time
 
     @property
     def items_length(self) -> int:
@@ -193,6 +202,7 @@ class course_info(info):
                 "course-id" in general_dict
                 and general_dict["course-id"] != self.course_id
             ):
+                print(general_dict["course-id"], self.course_id)
                 raise ValueError(
                     "Error! Folder contains existing course, please select another folder to continue!"
                 )

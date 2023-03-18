@@ -1,10 +1,10 @@
-# I believe lti stands for Learning Tools Interoperability
+# Side note: I believe lti stands for Learning Tools Interoperability
 import os
 from typing import Callable, Dict
 
 from bs4 import BeautifulSoup, Tag
 
-from src.container import course_info, item_info
+from src.container import item_info
 from src.downloader import downloader
 from src.module.echo360_handler import Echo360Extractor
 from src.utils.enums import video_mode
