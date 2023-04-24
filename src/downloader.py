@@ -170,15 +170,21 @@ class downloader:
                 f"Error! File is not found on the target url!\n Detail: {e}"
             )
 
-    def get_local_file_size(self) -> int:
+    def get_local_file_size(
+        self, assign_to_attribute: bool = True, filename: str = None
+    ) -> int:
         """
         Retrieve file size of local file
         """
-        if not os.path.isfile(self.store_path):
+        query_filename = self.store_path
+        if filename is not None:
+            query_filename = filename
+        if not os.path.isfile(query_filename):
             return 0
-        self.fetched_length = os.stat(self.store_path).st_size
-
-        return self.fetched_length
+        file_length = os.stat(query_filename).st_size
+        if assign_to_attribute:
+            self.fetched_length = file_length
+        return file_length
 
     def __retry(self):
         """
@@ -250,7 +256,9 @@ class downloader:
         if local_size >= self.content_length and self.content_length != -1:
             print(f"[Status] File Exist, no need to download. {self.store_path}")
             return True
-        if self.threshold is not None and self.content_length < self.threshold:
+        if (
+            self.threshold is not None and self.content_length < self.threshold
+        ) or self.content_length == 170:
             print(
                 f"[Status] File too small, cookie might not be valid, remove existing json to continue "
             )
@@ -280,7 +288,12 @@ class downloader:
     def duplicate(self, new_file_path: str):
         if not self.downloaded:
             self.download()
-
+        local_size = self.get_local_file_size(
+            assign_to_attribute=False, filename=new_file_path
+        )
+        if local_size >= self.content_length and self.content_length != -1:
+            print(f"[Status] File Exist, no need to duplicate. {new_file_path}")
+            return True
         try:
             with open(self.store_path, "rb") as file_obj:
                 with open(new_file_path, "wb") as new_file_obj:

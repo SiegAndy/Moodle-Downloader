@@ -2,12 +2,16 @@ from typing import Callable, Dict
 
 from src.container import item_info
 from src.downloader import downloader
-from src.utils.enums import page_mode
+from src.utils.enums import download_mode, page_mode
 from src.utils.func import html_to_pdf
 
 
 def construct_page(
-    target: item_info, mode: page_mode, info_param: Dict, callback: Callable
+    target: item_info,
+    mode: page_mode,
+    info_param: Dict,
+    callback: Callable,
+    config: Dict = None,
 ) -> downloader:
     info_param["url_filename"] = target.title
     the_downloader = downloader(

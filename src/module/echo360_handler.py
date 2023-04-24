@@ -20,7 +20,7 @@ from src.utils.params import modified_expire_time
 
 
 class Echo360Extractor:
-    last_modified = int
+    expirey = int
     base_url: str = "https://echo360.org/"
     video_base_url: str = "https://echo360.org/lesson/{}/classroom#sortDirection=desc"
     video_download_url_head: str = "https://content.echo360.org"
@@ -70,9 +70,9 @@ class Echo360Extractor:
             self.display_info_thread = None
 
         with open(self.json_store_path, "w", encoding="utf-8") as f:
-            self.last_modified = time()
+            self.expirey = time() + modified_expire_time
             general_info = dict()
-            general_info["last_modified"] = self.last_modified
+            general_info["expirey"] = self.expirey
             general_info.update(self.to_json())
             self.video_info["general"] = general_info
             f.write(json.dumps(self.video_info, indent=4))
@@ -124,10 +124,7 @@ class Echo360Extractor:
                 )
                 return False
             general_info = existed_json["general"]
-            if (
-                "last_modified" in general_info
-                and time() - general_info["last_modified"] > modified_expire_time
-            ):
+            if "expirey" in general_info and time() > general_info["expirey"]:
                 self.display_message(
                     message=f"[Finished] Previous Stored Info Might Expired, Re-Fetching info"
                 )

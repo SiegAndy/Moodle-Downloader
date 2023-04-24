@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup, Tag
 from src.container import item_info
 from src.downloader import downloader
 from src.module.echo360_handler import Echo360Extractor
-from src.utils.enums import video_mode
+from src.utils.enums import download_mode, video_mode
 from src.utils.func import checksum
 
 
@@ -45,8 +45,15 @@ def fetch_lti_params(curr_item: item_info, soup: BeautifulSoup, store_dir: str) 
 
 
 def construct_echo360(
-    target: item_info, mode: video_mode, info_param: Dict, callback: Callable
+    target: item_info,
+    mode: video_mode,
+    info_param: Dict,
+    callback: Callable,
+    config: Dict = None,
 ) -> downloader:
+    if config is not None and config["download_mode"] == download_mode.FileOnly:
+        print(f"Ignoring external learning tool type.")
+        return
     if "echo360" not in target.detail:
         print(
             f"Only support donwloading echo360 video for external learning tool type."

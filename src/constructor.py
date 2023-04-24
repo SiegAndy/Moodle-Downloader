@@ -206,6 +206,7 @@ class constructor:
                     mode=self.config["video_mode"],
                     info_param=info_param,
                     callback=partial_callback,
+                    config=self.config,
                 )
             else:
                 continue

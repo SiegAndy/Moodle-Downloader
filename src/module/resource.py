@@ -5,7 +5,7 @@ from src.downloader import downloader
 
 
 def construct_file(
-    target: item_info, info_param: Dict, callback: Callable
+    target: item_info, info_param: Dict, callback: Callable, config: Dict = None
 ) -> downloader:
     the_downloader = downloader(url=target.link, cookies=info_param["cookie"])
     info_param["url_filename"] = the_downloader.file_name
